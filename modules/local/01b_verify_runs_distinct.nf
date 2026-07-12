@@ -9,6 +9,11 @@
 //
 // SORT_FASTQS fingerprints each run by hashing a sample of its read IDs (ONT
 // UUIDs, unique per sequencing run). Identical fingerprints mean identical reads.
+//
+// --allow_duplicate_runs downgrades the abort to a loud warning. That exists for
+// pipeline development, where the same flowcell is deliberately copied under
+// several run names to exercise the multi-batch path before real batches exist.
+// It is not a switch to reach for on real data.
 
 process VERIFY_RUNS_DISTINCT {
     label 'process_single'
@@ -28,18 +33,27 @@ process VERIFY_RUNS_DISTINCT {
 
     dupes=\$(tail -n +2 run_fingerprints.tsv | cut -f2 | sort | uniq -d)
     if [ -n "\$dupes" ]; then
-        echo "ERROR: two or more runs in --input contain the SAME reads." >&2
-        echo "" >&2
+        echo "Two or more runs in --input contain the SAME reads:" >&2
         for d in \$dupes; do
-            echo "  identical runs: \$(awk -v h="\$d" '\$2==h {printf "%s ", \$1}' run_fingerprints.tsv)" >&2
+            echo "  identical: \$(awk -v h="\$d" '\$2==h {printf "%s ", \$1}' run_fingerprints.tsv)" >&2
         done
         echo "" >&2
-        echo "Pooling a flowcell twice pseudoreplicates every sample it carries and" >&2
-        echo "invalidates the cohort allele frequencies. Fix --input and re-run." >&2
-        exit 1
-    fi
+        echo "Pooling a flowcell twice pseudoreplicates every sample it carries, so the" >&2
+        echo "cohort allele frequencies and population structure are not interpretable." >&2
 
-    echo "All \$(tail -n +2 run_fingerprints.tsv | wc -l) run(s) carry distinct reads."
+        if [ "${params.allow_duplicate_runs}" = "true" ]; then
+            echo "" >&2
+            echo "WARNING: continuing anyway because --allow_duplicate_runs was set." >&2
+            echo "         The results are structurally valid but NOT scientifically usable." >&2
+        else
+            echo "" >&2
+            echo "Fix --input, or pass --allow_duplicate_runs true if you are deliberately" >&2
+            echo "re-using a flowcell to develop the pipeline." >&2
+            exit 1
+        fi
+    else
+        echo "All \$(tail -n +2 run_fingerprints.tsv | wc -l) run(s) carry distinct reads."
+    fi
     """
 
     stub:

@@ -134,7 +134,7 @@ because each one corresponds to a failure that actually happened:
 
 | Guard | Catches |
 |---|---|
-| `VERIFY_RUNS_DISTINCT` | the **same flowcell supplied twice** in `--input`. Fingerprints each run by hashing its read UUIDs; identical reads abort the run. Pooling a flowcell twice pseudoreplicates every sample it carries and silently invalidates the cohort frequencies. |
+| `VERIFY_RUNS_DISTINCT` | the **same flowcell supplied twice** in `--input`. Fingerprints each run by hashing its read UUIDs; identical reads abort the run. Pooling a flowcell twice pseudoreplicates every sample it carries and silently invalidates the cohort frequencies. Override with `-profile dev` (see below). |
 | `_setup.R` sample-id uniqueness | controls (KH2, NC) are re-sequenced on **every** flowcell, so `sample_id` is not unique once runs are pooled. Each sequencing instance is disambiguated (`KH2__<run>`); a residual duplicate aborts. |
 | stage 12 fan-out check | the coverage table having more rows than the cohort has samples — the signature of a merge fanning out on a non-unique `sample_id` (one control on 5 runs produced **5⁶ = 15,625** rows). |
 | stage 12 join check | no coverage row matching any `sample_id` — a broken join, not a result. |
@@ -153,6 +153,21 @@ tests/validate_cohort.py --outdir ../05_results/v2 \
 
 > A clean integer scaling factor between a single run and a pooled cohort is **not**
 > evidence of correctness — it is exactly what duplicated input data looks like.
+
+### Development mode
+
+While the multi-batch path is being built, the same flowcell is deliberately
+copied under several run names so the pooling logic can be exercised before real
+second and third batches exist. `VERIFY_RUNS_DISTINCT` would (correctly) refuse
+that, so use the `dev` profile:
+
+```bash
+nextflow run . -profile docker,dev --input assets/runs.csv --outdir results
+```
+
+It downgrades the abort to a warning and prints a banner in the log. **Results
+produced this way are pseudoreplicated and are not scientifically usable** —
+`dev` is not a switch to reach for on real data.
 
 ## Testing
 

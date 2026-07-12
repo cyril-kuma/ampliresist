@@ -35,6 +35,18 @@ workflow {
         log.warn("--clair3_model was given but --variant_caller is '${params.variant_caller}'; it will be ignored.")
     }
 
+    // Make a development run impossible to mistake for a real one later.
+    if (params.allow_duplicate_runs) {
+        log.warn("""
+        ============================================================
+         --allow_duplicate_runs is set: DEVELOPMENT MODE
+         Duplicate flowcells will NOT abort the run.
+         Any cohort frequencies or population structure produced are
+         pseudoreplicated and NOT scientifically usable.
+        ============================================================
+        """.stripIndent())
+    }
+
     //
     // Input: one row per sequencing run. Any number of runs may be given; the
     // drug-resistance analysis is grouped per run automatically.

@@ -150,6 +150,12 @@
           "default": true,
           "hidden": true,
           "description": "Validate parameters against the schema at runtime"
+        },
+        "allow_duplicate_runs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Continue even if two runs in --input contain identical reads (development only)",
+          "help_text": "Pooling a flowcell twice pseudoreplicates every sample it carries, so the cohort allele frequencies and population structure are not interpretable. Enable this only when deliberately re-using a flowcell to develop the multi-batch path."
         }
       }
     },
