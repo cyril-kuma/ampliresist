@@ -1,0 +1,18 @@
+marker_col,gene,marker,marker_type,drug_context,qc_status,qc_note,include_heatmap,include_frequency,interpretation_scope
+crt_227_AC,crt,pfcrt K76T,snp,Chloroquine,accepted,Classical chloroquine-resistance marker.,TRUE,TRUE,Marker-associated reduced susceptibility; not clinical treatment failure.
+dhfr_152_AT,dhfr,pfdhfr N51I,snp,Pyrimethamine,accepted,Pyrimethamine-associated marker.,TRUE,TRUE,Report among pfdhfr-callable specimens only.
+dhfr_175_TC,dhfr,pfdhfr C59R,snp,Pyrimethamine,accepted,Pyrimethamine-associated marker.,TRUE,TRUE,Report among pfdhfr-callable specimens only.
+dhfr_323_GA,dhfr,pfdhfr S108N,snp,Pyrimethamine,accepted,Pyrimethamine-associated marker.,TRUE,TRUE,Report among pfdhfr-callable specimens only.
+dhfr_323_GC,dhfr,pfdhfr S108T,snp,Pyrimethamine,accepted,Alternative S108 allele.,FALSE,TRUE,Report if detected among pfdhfr-callable specimens.
+dhfr_490_AT,dhfr,pfdhfr I164L,snp,Pyrimethamine,accepted,High-level pyrimethamine-associated marker.,FALSE,TRUE,Report among pfdhfr-callable specimens only.
+dhfr_492_AG,dhfr,pfdhfr I164M,snp,Pyrimethamine,accepted,High-level pyrimethamine-associated marker.,FALSE,TRUE,Report among pfdhfr-callable specimens only.
+dhps_1306_TG,dhps,pfdhps S436A,snp,Sulfadoxine,accepted,Sulfadoxine-associated marker.,FALSE,TRUE,Report among pfdhps-callable specimens only.
+dhps_1307_CT,dhps,pfdhps S436F,snp,Sulfadoxine,accepted,Sulfadoxine-associated marker.,FALSE,TRUE,Report among pfdhps-callable specimens only.
+dhps_1310_GC,dhps,pfdhps A437G,snp,Sulfadoxine,reference_caveat,3D7 reference carries 437G; interpret directionality cautiously.,FALSE,TRUE,Report with reference-coding caveat.
+dhps_1618_AG,dhps,pfdhps K540E,snp,Sulfadoxine,accepted,High-level sulfadoxine-associated marker.,FALSE,TRUE,Report among pfdhps-callable specimens only.
+dhps_1620_AT,dhps,pfdhps K540N,snp,Sulfadoxine,rejected_artifact,Low-complexity A-rich context with recurrent heterozygous-pattern artifact.,FALSE,FALSE,Do not count as a confident field resistance allele without independent validation.
+dhps_1742_CG,dhps,pfdhps A581G,snp,Sulfadoxine,requires_validation,Low-complexity-adjacent context; field signal requires independent confirmation.,TRUE,TRUE,Report separately as validation-needed if present.
+dhps_1837_GA,dhps,pfdhps A613T,snp,Sulfadoxine,accepted,High-level sulfadoxine-associated marker.,FALSE,TRUE,Report among pfdhps-callable specimens only.
+dhps_1837_GT,dhps,pfdhps A613S,snp,Sulfadoxine,accepted,High-level sulfadoxine-associated marker.,FALSE,TRUE,Report among pfdhps-callable specimens only.
+mdr1_256_AT,mdr1,pfmdr1 N86Y,snp,Partner drug/chloroquine,accepted,Partner-drug/chloroquine-associated marker.,TRUE,TRUE,Avoid standalone resistant/susceptible labels.
+mdr1_551_AT,mdr1,pfmdr1 Y184F,snp,Partner drug,requires_validation,TA microsatellite context with recurrent heterozygous-pattern signal.,FALSE,TRUE,Report separately as validation-needed if present.

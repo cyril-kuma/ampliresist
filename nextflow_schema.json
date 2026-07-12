@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/waccbip/nano-rave-drag1/master/nextflow_schema.json",
+  "title": "nano-rave-drag1 pipeline parameters",
+  "description": "ONT amplicon variant calling and P. falciparum drug-resistance genotyping",
+  "type": "object",
+  "defs": {
+    "input_output_options": {
+      "title": "Input/output options",
+      "type": "object",
+      "required": [
+        "input",
+        "reference_manifest",
+        "outdir"
+      ],
+      "properties": {
+        "input": {
+          "type": "string",
+          "format": "file-path",
+          "exists": true,
+          "mimetype": "text/csv",
+          "pattern": "^\\S+\\.csv$",
+          "description": "Run samplesheet CSV with columns: run_name,sequencing_dir,sequencing_summary",
+          "help_text": "One row per ONT sequencing run; any number of runs may be given. 'sequencing_dir' is the flowcell output directory containing fastq_pass/. Generate with bin/make_run_samplesheet.sh. 'run_name' must match ont_multiplex_group in the sample-sheet workbook."
+        },
+        "reference_manifest": {
+          "type": "string",
+          "format": "file-path",
+          "exists": true,
+          "pattern": "^\\S+\\.csv$",
+          "description": "CSV with columns: reference_id,reference_path (one row per amplicon reference FASTA)"
+        },
+        "outdir": {
+          "type": "string",
+          "format": "directory-path",
+          "description": "Output directory for results",
+          "default": "results"
+        }
+      }
+    },
+    "read_handling": {
+      "title": "Read handling",
+      "type": "object",
+      "properties": {
+        "min_barcode_dir_size": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "description": "Skip barcode directories smaller than this (MB)",
+          "help_text": "Unused barcodes on a 96-plex flowcell still collect stray reads. If EVERY barcode is filtered out the run fails loudly rather than silently producing nothing."
+        }
+      }
+    },
+    "variant_calling": {
+      "title": "Variant calling",
+      "type": "object",
+      "properties": {
+        "variant_caller": {
+          "type": "string",
+          "default": "clair3",
+          "enum": [
+            "clair3",
+            "medaka",
+            "medaka_haploid",
+            "freebayes"
+          ],
+          "description": "Variant caller. clair3 is the validated path for this assay."
+        },
+        "clair3_model": {
+          "type": "string",
+          "format": "directory-path",
+          "exists": true,
+          "description": "Clair3 model directory. Required for --variant_caller clair3; must match the basecaller chemistry.",
+          "help_text": "The pinned Clair3 image only ships R9.4.1 models. This data is R10.4.1, so the bundled r1041_e82_400bps_sup_v430 model is used by default."
+        },
+        "clair3_args": {
+          "type": "string",
+          "default": "--no_phasing_for_fa --include_all_ctgs --haploid_precise",
+          "description": "Extra Clair3 arguments.",
+          "help_text": "--no_phasing_for_fa and --include_all_ctgs are required or Clair3 emits no genotypes on small Pf amplicons (its phasing/contig filters assume human chromosomes). --haploid_precise because P. falciparum is haploid."
+        }
+      }
+    },
+    "drug_resistance_analysis": {
+      "title": "Drug-resistance analysis",
+      "type": "object",
+      "properties": {
+        "drug_resistance": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run the drug-resistance analysis stages (coverage QC, genotype calls, frequencies, summary tables)"
+        },
+        "samplesheet": {
+          "type": "string",
+          "format": "file-path",
+          "exists": true,
+          "description": "Sample metadata workbook (.xlsx). Its ont_multiplex_group column must contain the run_name values used in --input."
+        },
+        "resources": {
+          "type": "string",
+          "format": "directory-path",
+          "exists": true,
+          "description": "Analysis resources: amplicon positions, DR variant info, genetic code, k13 annotation and the WHO kelch13 catalogue"
+        },
+        "multiplex_sheet": {
+          "type": "string",
+          "default": "samplesheet",
+          "description": "Sheet name inside the metadata workbook"
+        },
+        "min_cov": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "description": "Amplicon median coverage AND per-SNP depth threshold",
+          "help_text": "Was 50x during the retired feasibility phase, which left dhfr callable in only 27.7% of samples."
+        },
+        "analysis_date": {
+          "type": "string",
+          "hidden": true,
+          "description": "Date stamp used in analysis output filenames (defaults to today)"
+        },
+        "cohort_name": {
+          "type": "string",
+          "default": "DRAG1_cohort",
+          "description": "Label for the pooled cohort, used in analysis output filenames",
+          "help_text": "The resistance analysis pools every flowcell in --input into a single cohort, so this names the combined sample set rather than a flowcell."
+        }
+      }
+    },
+    "generic_options": {
+      "title": "Generic options",
+      "type": "object",
+      "properties": {
+        "publish_dir_mode": {
+          "type": "string",
+          "default": "copy",
+          "enum": [
+            "symlink",
+            "rellink",
+            "link",
+            "copy",
+            "copyNoFollow",
+            "move"
+          ],
+          "hidden": true,
+          "description": "Method used to save pipeline results to the output directory"
+        },
+        "validate_params": {
+          "type": "boolean",
+          "default": true,
+          "hidden": true,
+          "description": "Validate parameters against the schema at runtime"
+        }
+      }
+    },
+    "population_genetics": {
+      "title": "CSP population genetics",
+      "type": "object",
+      "description": "Parasite population structure and diversity at the csp (RTS,S/R21 vaccine target) locus. A different question from drug resistance.",
+      "properties": {
+        "population_genetics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run the CSP population-genetics subworkflow (haplotype diversity, TH2R/TH3R network, MAF, Fst, PCA)"
+        },
+        "csp_contig_rename_map": {
+          "type": "string",
+          "format": "file-path",
+          "exists": true,
+          "description": "TSV mapping amplicon contig names to chromosome-style names (plink requires these)"
+        },
+        "csp_coastal_regions": {
+          "type": "string",
+          "default": "Greater Accra",
+          "description": "Pipe-separated collection_region values forming the Coastal group"
+        },
+        "csp_middlebelt_regions": {
+          "type": "string",
+          "default": "Bono|Ashanti",
+          "description": "Pipe-separated collection_region values forming the Middlebelt group"
+        },
+        "csp_savannah_regions": {
+          "type": "string",
+          "default": "Savannah|North East|Upper West",
+          "description": "Pipe-separated collection_region values forming the Savannah group"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/defs/input_output_options"
+    },
+    {
+      "$ref": "#/defs/read_handling"
+    },
+    {
+      "$ref": "#/defs/variant_calling"
+    },
+    {
+      "$ref": "#/defs/drug_resistance_analysis"
+    },
+    {
+      "$ref": "#/defs/generic_options"
+    },
+    {
+      "$ref": "#/defs/population_genetics"
+    }
+  ]
+}

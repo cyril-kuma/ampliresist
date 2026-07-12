@@ -1,0 +1,10 @@
+ref_amplicon_3D7_DR1_crt_F5.R5_178
+ref_amplicon_3D7_DR1_dhfr_F2.R2_491
+ref_amplicon_3D7_DR1_dhps_F4.R4_642
+ref_amplicon_3D7_DR1_mdr1_F1.R1_364
+ref_amplicon_3D7_DR1_k13_F1.R2_869
+ref_amplicon_3D7_AG1_msp2_F4.R4_746
+ref_amplicon_3D7_AG1_eba175_F1.R1_880
+ref_amplicon_3D7_AG1_csp_F3.R3_970
+ref_amplicon_3D7_AG1_ama1_F2.R2_1500
+ref_amplicon_3D7_AG1_msp1_F1.R1_5K

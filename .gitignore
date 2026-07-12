@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# Sensitive / unpublished research data -- MUST NOT be published.
+# This is a public repository.
+# ---------------------------------------------------------------------------
+
+# Sample metadata: 457 rows incl. specimen IDs and the latitude/longitude of
+# collection sites. Supply your own with --samplesheet.
+assets/samplesheet.xlsx
+assets/*samplesheet*.xlsx
+assets/samplesheet.backup_*.xlsx
+
+# Real sequencing reads and ONT sequencing summaries from the study mosquitoes.
+assets/test_data/
+
+# Generated run samplesheets: they embed absolute paths to the local data.
+assets/runs.csv
+assets/test_runs.csv
+
+# Third-party / copyrighted provenance material (MalariaGEN eLife-2015 k13 table,
+# amplicon design documents, earlier curation spreadsheets). Kept locally as the
+# evidence trail for assets/resources/; not ours to redistribute.
+docs/provenance/*
+!docs/provenance/README.md
+
+# ---------------------------------------------------------------------------
+# Large binaries -- fetch these rather than versioning them.
+# ---------------------------------------------------------------------------
+
+# Clair3 basecalling model (~78 MB). Download the model matching your chemistry
+# from ONT Rerio: https://github.com/nanoporetech/rerio
+assets/references/clair3_models/
+
+# ---------------------------------------------------------------------------
+# Nextflow scratch, caches and results
+# ---------------------------------------------------------------------------
+work/
+work_*/
+.nextflow/
+.nextflow.log*
+results/
+results_*/
+nextflow_results/
+*.trace.txt
+trace-*.txt
+timeline-*.html
+report-*.html
+dag-*.html
+
+# ---------------------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------------------
+.DS_Store
+*.swp
+*~
+__pycache__/
+*.pyc
+.Rhistory
+.RData

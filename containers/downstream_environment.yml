@@ -1,0 +1,26 @@
+name: drag1-downstream
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - r-base>=4.3
+  - r-yaml
+  - r-tidyverse
+  - r-readxl
+  - r-vcfr
+  - r-cowplot
+  - r-data.table
+  - r-viridis
+  - r-reshape2
+  - r-plotly
+  - r-rmarkdown
+  - r-pegas
+  - r-adegenet
+  - bioconductor-variantannotation
+  - bcftools
+  - vcftools
+  - htslib
+  - tabix
+  - plink

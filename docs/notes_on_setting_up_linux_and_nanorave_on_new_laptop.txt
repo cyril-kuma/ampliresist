@@ -1,0 +1,88 @@
+Steps for setting up a linux subsystem on a Windows machine
+
+
+1) Download windows subsystem for linux and Ubuntu from Windows Store
+Open Windows store
+Search wsl
+
+Install windows subsystem for linux
+
+Then search for & install Ubuntu
+
+
+####
+2) Install Java for linux - this step turned out to be redundant and we uninstalled Java subsequently, because Nextflow uses its own Java
+Go to Java web page
+Click the 'not the right operating system' - https://www.java.com/en/download/manual.jsp
+Download Linux x64 (filesize: 93.05 MB)
+
+Open Ubuntu terminal
+Set up username and password
+
+https://www.java.com/en/download/help/linux_x64_install.html
+
+cd /usr/local/bin
+sudo mv /mnt/c/users/mmsgh/Downloads/jre-8u381-linux-x64.tar.gz .
+
+sudo tar zxvf jre-8u381-linux-x64.tar.gz
+
+java -h
+
+vi ~/.bashrc
+G
+A
+new line
+export PATH=$PATH:/usr/local/bin/jre1.8.0_381/bin
+escape
+:x [enter]
+
+source ~/.bashrc
+
+java -h
+####
+
+
+2) Install Nextflow, SDK and Java
+
+cd
+
+https://www.nextflow.io/docs/latest/getstarted.html
+wget -qO- https://get.nextflow.io | bash
+
+sudo mv nextflow /usr/local/bin/
+
+#  Remove previous version of java
+sudo rm -rf /usr/local/bin/jre* 
+
+# Install SDK
+
+sudo apt update -q && sudo apt install -y zip unzip
+
+https://sdkman.io/
+curl -s "https://get.sdkman.io" | bash
+
+source "/home/lucas/.sdkman/bin/sdkman-init.sh"
+
+
+# Install Java
+sdk install java 17.0.6-amzn
+
+nextflow -h
+
+3) Run nano-rave
+https://github.com/sanger-pathogens/nano-rave
+
+git clone https://github.com/sanger-pathogens/nano-rave.git
+
+cd nano-rave
+
+
+
+
+
+
+
+
+
+
+

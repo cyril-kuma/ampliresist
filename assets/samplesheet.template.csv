@@ -1,0 +1,2 @@
+project,assay,run_id,ont_multiplex_group,ont_seq_date,ont_flowcell_no,ont_barcode,sample_id,specimen_id,sample_code,sample_status,sample_material,species,sibling_species,bioclimatic_zone,collection_region,collection_site,latitude,longitude,patient_id,status,notes
+MYPROJECT,DRAG1,Amplicon_Sequencing_01,RUN01_20250920,Sat Sep 20 2025,FAZ00001,barcode01,SMP001,SPEC001,SMP001SPEC001,Blood-fed,Mosquito_gDNA,Anopheles_gambiae_s.l,An_coluzzii,Coastal_Savannah,Region,Site,0.0000,0.0000,SMP001SPEC001,Blood-fed,Mosquito_gDNA
