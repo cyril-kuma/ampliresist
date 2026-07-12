@@ -28,7 +28,8 @@ process INTEGRATE_METADATA {
     mkdir -p 06_integrated
 
     # the per-specimen coverage table, not the per-gene run summary
-    cov=\$(find ${coverage_qc} -name '*coverage_by_run_sample*.csv' | head -1)
+    # -L: the staged directory is a symlink; find will not descend without it.
+    cov=\$(find -L ${coverage_qc} -name '*coverage_by_run_sample*.csv' | head -1)
     if [ -z "\$cov" ]; then
         echo "ERROR: no per-specimen coverage table in ${coverage_qc}" >&2
         exit 1

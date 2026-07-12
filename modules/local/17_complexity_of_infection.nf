@@ -27,7 +27,9 @@ process COMPLEXITY_OF_INFECTION {
     mkdir -p 05_complexity
     per_call_list=\$(ls *_per_call.tsv | paste -sd,)
 
-    catalogue=\$(find ${genotype_calls} -name '*_artefact_catalogue.csv' | head -1)
+    # -L: Nextflow stages a directory input as a SYMLINK, and find will not
+    # descend into one without it. Without -L this silently finds nothing.
+    catalogue=\$(find -L ${genotype_calls} -name '*_artefact_catalogue.csv' | head -1)
     if [ -z "\$catalogue" ]; then
         echo "ERROR: no artefact catalogue found in ${genotype_calls}." >&2
         echo "Without it the artefact positions cannot be excluded, and every" >&2
