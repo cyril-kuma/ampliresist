@@ -33,18 +33,76 @@ at AF ≈ 0.5 with almost no variance — including k13 **C580Y**, which is
 essentially absent from Africa. 89/94 specimens at AF 0.535 ± 0.046 is not
 biology; it is a systematic mapping/basecalling artefact.
 
-Every call is now classified `clonal` | `mixed` | `artefact` | `ref`. A position
-is an artefact when it is called in ≥40% of field specimens with mean AF in
-[0.40, 0.60] and SD < 0.10 (thresholds are env-configurable; the 0.40 recurrence
-default was chosen from a 0.80→0.20 sweep on the real cohort, where 0.50–0.20 is
-a stable plateau that flags exactly the four known artefacts and never a genuine
-variant — real variants sit at AF 0.84–0.95). Artefact positions report **NOT
-CALLABLE** (`NA`), not wild-type. Catalogue: `<run>_artefact_catalogue.csv`.
+Every call is now classified `clonal` | `mixed` | `artefact` | `ref`. The
+load-bearing criterion is **`frac_het`** — the fraction of specimens in which a
+position is called heterozygous. *P. falciparum* is haploid in the host, so a
+mono-clonal infection carrying a variant is `1/1`; any real polymorphism, at any
+frequency, produces homozygotes. The separation is absolute: the four artefacts
+sit at `frac_het` = **1.000** (het in every specimen, homozygous in none), real
+variants at 0.000–0.152. Artefact positions report **NOT CALLABLE** (`NA`), not
+wild-type. Catalogue: `<run>_artefact_catalogue.csv`.
+
+Recurrence (≥40% of specimens), the AF window [0.35, 0.75] and SD < 0.10 are
+retained as supporting conditions but are **not sufficient alone** — `csp_950`
+sits at AF 0.739, inside the window, and is a genuine homozygous variant. Without
+the `frac_het` term a real variant at AF ~0.74 present in >40% of specimens would
+have been silently masked. All thresholds are env-configurable.
 
 Consequence: `mdr1 Y184F`, `dhps K540N` and `dhps A581G` are now correctly
 reported as not callable rather than as confident calls. The SP conclusion is
 unaffected — the quintuple/sextuple hinges on **K540E** (codon 1618), a different
 position, which is genuinely callable and genuinely 0/413.
+
+### New — read-level callability audit (`bin/05_call_evidence_audit.sh`, `docs/CALLABILITY.md`)
+
+The statistical rule justifies refusing to report a frequency; it does not say
+why. The audit produces the read-level evidence, and for `mdr1 Y184F` it excludes
+every technical explanation: depth is 5,000–10,000×; **both** alleles are MAPQ 60,
+strand-balanced, zero MAPQ-0 reads; and the **clonal control KH2 — a single
+genome, which cannot be heterozygous — is 99.3% reference** at the same position,
+depth and context. The reads are real. What is not credible is the *invariance*:
+~90 of 94 unrelated mosquito infections sit at AF 0.63–0.68, and independent
+infections cannot share a clone ratio. The only mechanism consistent with all
+four observations is co-amplification of a second template at fixed stoichiometry
+in bloodmeal-derived material.
+
+This matters because `Y184F` is a **common** West African mutation, so a spurious
+call at 65% would have looked entirely plausible and passed review. Sanger would
+not have resolved it — it reads the same mixed trace and cannot distinguish a 65%
+co-amplicon from a 65% minor clone.
+
+### New — complexity of infection (`bin/06_complexity_of_infection.R`)
+
+Flags polygenomic infections so multilocus genotypes can be restricted to
+mono-infections. **msp1 is unavailable**: it is in the reference manifest and is
+aligned against, but carries *zero reads in every specimen* (0/40 bedGraphs with
+any coverage) — the amplicon was never generated. So complexity is read from
+within-sample heterozygosity across the surviving amplicons instead: *P.
+falciparum* is haploid in the host, so a het call means >1 clone.
+
+**135/452 (29.9%) are polygenomic**, mean minor allele fraction 0.357. Excluding
+the artefact positions is not optional — they contributed **1,279 spurious het
+calls** and would have classified essentially the whole cohort as polyclonal.
+
+### New — Objective 1/2 metadata integration (`bin/07_integrate_metadata.R`)
+
+Joins qPCR parasite density (Obj2) and bloodmeal host (Obj1) to the genotypes,
+and runs the **callability-bias test**: dhfr is callable in only 28% of specimens,
+and if callability tracked parasite density those frequencies would be computed on
+a biased high-parasitaemia subsample.
+
+It does not. `dhfr` callable Cq 29.8 vs uncallable 29.6 (**p = 0.43**); no marker
+shows bias (all p > 0.37). Callability is missing-at-random with respect to
+density, so the frequencies stand. Low dhfr callability is an **amplicon-efficiency**
+problem (mean max depth 168, against mdr1's 10,359), not a specimen-quality one.
+
+Two data-integrity traps are handled explicitly. `specimen_id` is **not unique** —
+six ids are reused by genuinely different mosquitoes collected at different sites
+in different years (`MOS1071` is both FT027, Bekwai 2024, Pf-negative *and* FT275,
+Prang 2025, Pf-positive), so joining on it both fans the table out and attaches the
+wrong mosquito's Cq to a genotype. And the two objectives **swap** their column
+names (`sample_id`/`sample_code` mean opposite things). The join uses the
+concatenated key, and a hard guard aborts if a left join ever adds a row.
 
 ### New — `per_call.tsv`
 

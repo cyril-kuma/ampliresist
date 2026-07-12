@@ -431,13 +431,29 @@ hom_af_min <- as.numeric(Sys.getenv("NANORAVE_HOM_AF", unset = "0.8"))
 #   artifact recurrent + intermediate AF + tight sd    -> NA (locus not callable)
 #   ref      otherwise                                 -> wild type (0)
 # ===========================================================================
-# Recurrence threshold. Calibrated on the RUN23 field cohort (n=94): sweeping it
-# from 0.80 down to 0.20 gives a STABLE flag set from 0.50 downward -- exactly the
-# four known artefact positions (k13 1739, mdr1 551, dhps 1620, dhps 1742) -- and
-# NO genuine variant is caught at any threshold, because the real ones sit at
-# AF 0.84-0.95, above the 0.75 window. 0.40 sits mid-plateau with margin either
-# side. The AF window and the tight sd do the discriminating; recurrence only
-# separates a systematic error from a rare true variant (e.g. crt K76T, 4%).
+# The load-bearing criterion is frac_het: the fraction of specimens in which the
+# position is called HETEROZYGOUS. A real polymorphism, however common, produces
+# homozygotes -- P. falciparum is haploid in the host, so a mono-clonal infection
+# carrying the variant is 1/1. A position called 0/1 in EVERY specimen and 1/1 in
+# none is not a polymorphism; no allele frequency and no mixture of clones can
+# produce that. On this cohort the separation is absolute:
+#
+#   artefacts     frac_het = 1.000  (k13 1739, mdr1 551, dhps 1620, dhps 1742)
+#   real variants frac_het = 0.000 - 0.152  (dhfr 323/175/152, csp 902/963/1082)
+#
+# Read-level audit of mdr1 551 (bin/05_call_evidence_audit.sh) rules out every
+# technical explanation -- 7,500x depth, both alleles MAPQ 60, strand-balanced,
+# and the CLONAL control KH2 is 99.3% reference at the same position and depth.
+# The reads are real; what is not credible is the INVARIANCE: ~90 of 94 unrelated
+# mosquito infections sit at AF 0.63-0.68. Independent infections cannot share a
+# clone ratio. So the mixture is a fixed property of the assay on bloodmeal-derived
+# template (co-amplification), not of the parasites -- and the codon is not callable.
+#
+# The AF window and sd are kept as supporting conditions, but they are NOT
+# sufficient on their own: csp 950 sits at af_mean 0.739, inside the window, and
+# is a genuine homozygous variant (frac_het = 0). Without the frac_het term a real
+# variant at AF ~0.74 present in >40% of specimens would be silently masked.
+art_min_het  <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_MIN_HET",  unset = "0.90"))
 art_min_frac <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_MIN_FRAC", unset = "0.40"))
 art_af_lo    <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_AF_LO",   unset = "0.35"))
 art_af_hi    <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_AF_HI",   unset = "0.75"))
@@ -464,6 +480,7 @@ artefact_stats <- field_calls %>%
     frac_specimens = n_called / max(n_field_specimens, 1),
     af_sd          = ifelse(is.na(af_sd), 0, af_sd),
     is_artefact    = n_field_specimens >= art_min_n &
+                     frac_het       >= art_min_het  &   # never homozygous: the load-bearing test
                      frac_specimens >= art_min_frac &
                      af_mean >= art_af_lo & af_mean <= art_af_hi &
                      af_sd   <  art_max_sd
