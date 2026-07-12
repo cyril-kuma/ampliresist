@@ -13,6 +13,7 @@ include { MEDAKA_HAPLOID } from '../../modules/local/09c_medaka_haploid'
 include { FREEBAYES      } from '../../modules/local/09d_freebayes'
 include { BGZIP_TABIX    } from '../../modules/local/10_bgzip_tabix'
 include { GUNZIP_VCF     } from '../../modules/local/11_gunzip_vcf'
+include { PER_CALL_TABLE } from '../../modules/local/11b_per_call_table'
 
 workflow CALL_VARIANTS {
     take:
@@ -56,6 +57,9 @@ workflow CALL_VARIANTS {
 
     GUNZIP_VCF(ch_vcf_by_run)
 
+    // Tidy per-call table (GT/AF/DP) - the raw material for artifact QC.
+    PER_CALL_TABLE(GUNZIP_VCF.out.vcf)
+
     // GUNZIP_VCF batches per run (a sensible unit of work), but the resistance
     // analysis pools every run, so flatten the plain VCFs into one channel.
     ch_vcfs_plain = GUNZIP_VCF.out.vcf
@@ -64,6 +68,7 @@ workflow CALL_VARIANTS {
 
     emit:
     vcf        = BGZIP_TABIX.out.vcf   // [ meta, vcf.gz, tbi ]
+    per_call   = PER_CALL_TABLE.out.table
     vcfs_plain = ch_vcfs_plain         // vcf (flat, all runs)
     versions   = ch_versions
 }

@@ -573,13 +573,26 @@ dr_freq_table
 # amplicon, so the callable denominator is per gene. Recompute freq/pcnt on the
 # callable n and add an exact binomial 95% CI. This matches the proposal's
 # "locus-level denominators among successfully genotyped specimens".
-gene_callable <- c(
-  CRT  = sum(!is.na(geno_meta_all$crt_227_AC)),
-  DHFR = sum(!is.na(geno_meta_all$dhfr_152_AT)),
-  DHPS = sum(!is.na(geno_meta_all$dhps_1306_TG)),
-  MDR1 = sum(!is.na(geno_meta_all$mdr1_551_AT))
-)
-dr_freq_table$n_callable <- as.integer(gene_callable[dr_freq_table$gene])
+# PER-SNP callable denominator (was: one proxy SNP per gene).
+#
+# The gene-level proxy is unsafe now that systematic-artefact codons are masked to
+# NA. MDR1's proxy was mdr1_551_AT = Y184F, which IS the artefact: masking it would
+# have driven the whole MDR1 denominator to zero and silently killed N86Y with it.
+# Callability is a property of the CODON (amplicon coverage AND not-an-artefact),
+# so count it per SNP.
+dr_freq_table$n_callable <- vapply(
+  dr_freq_table$SNP,
+  function(s) if (s %in% names(geno_meta_all)) sum(!is.na(geno_meta_all[[s]])) else NA_integer_,
+  integer(1))
+
+# A codon masked as a systematic artefact is NOT CALLABLE - it is not "0% mutant".
+dr_freq_table$callable <- ifelse(is.na(dr_freq_table$n_callable) | dr_freq_table$n_callable == 0,
+                                 "not_callable", "callable")
+if (any(dr_freq_table$callable == "not_callable")) {
+  message("[stage3] markers reported as NOT CALLABLE (artefact-masked or no coverage): ",
+          paste(unique(dr_freq_table$Mutation[dr_freq_table$callable == "not_callable"]),
+                collapse = ", "))
+}
 
 # If NOTHING is callable at ANY locus, that is not a result - it means the join
 # between coverage, genotypes and the sample sheet failed upstream. Without this
@@ -592,6 +605,63 @@ if (all(is.na(dr_freq_table$n_callable)) || sum(dr_freq_table$n_callable, na.rm 
        "Check that stage 1's coverage table has real sample_ids.")
 }
 dr_freq_table$n_total    <- nrow(geno_meta_all)
+
+# ---------------------------------------------------------------------------
+# REFERENCE-POLARITY CORRECTION  (see 02_genotype_calls.R for the derivation)
+#
+# `Nref_count` counts specimens carrying a NON-REFERENCE allele. For almost every
+# marker the 3D7 reference is wild-type, so non-reference == mutation present.
+#
+# dhps A437G is the exception: the 3D7 reference genuinely CARRIES the resistant
+# allele (reference codon GGT = Gly = 437G; Girgis 2023: "3D7 = SGKAA"). There,
+# `Nref_count` counts WILD-TYPE (437A) specimens, so reporting it under the label
+# "A437G" states the exact opposite of the truth -- it reported A437G = 0% when
+# 437G is in fact at ~100%.
+#
+# Carriage of the NAMED mutation = n_callable - Nref_count for such markers.
+# The flag is derived (not hard-coded) in stage 2 and exported to
+# <run>_marker_polarity.csv; we re-derive it here so this stage is self-contained.
+# ---------------------------------------------------------------------------
+nr_codon_table <- c(
+  TTT="F",TTC="F",TTA="L",TTG="L",CTT="L",CTC="L",CTA="L",CTG="L",
+  ATT="I",ATC="I",ATA="I",ATG="M",GTT="V",GTC="V",GTA="V",GTG="V",
+  TCT="S",TCC="S",TCA="S",TCG="S",CCT="P",CCC="P",CCA="P",CCG="P",
+  ACT="T",ACC="T",ACA="T",ACG="T",GCT="A",GCC="A",GCA="A",GCG="A",
+  TAT="Y",TAC="Y",CAT="H",CAC="H",CAA="Q",CAG="Q",AAT="N",AAC="N",
+  AAA="K",AAG="K",GAT="D",GAC="D",GAA="E",GAG="E",TGT="C",TGC="C",
+  TGG="W",CGT="R",CGC="R",CGA="R",CGG="R",AGT="S",AGC="S",AGA="R",
+  AGG="R",GGT="G",GGC="G",GGA="G",GGG="G")
+
+# stage 3 does not otherwise read the marker table; load it here.
+snp_data_polarity <- readxl::read_excel(file.path(resource_dir, "DR_variant_info_v2.xlsx"), sheet = 1)
+
+polarity <- snp_data_polarity %>%
+  filter(key_snp == TRUE) %>%
+  transmute(SNP = snp_id,
+            ref_is_mutant = !is.na(nr_codon_table[toupper(codon_ref)]) &
+                            unname(nr_codon_table[toupper(codon_ref)]) != aa_ref)
+
+dr_freq_table <- dr_freq_table %>%
+  left_join(polarity, by = "SNP") %>%
+  mutate(ref_is_mutant = ifelse(is.na(ref_is_mutant), FALSE, ref_is_mutant))
+
+if (any(dr_freq_table$ref_is_mutant)) {
+  flipped <- dr_freq_table$Mutation[dr_freq_table$ref_is_mutant]
+  message("[stage3] reference carries the mutant allele at: ",
+          paste(unique(flipped), collapse = ", "),
+          " - reporting CARRIAGE of the named mutation (n_callable - Nref_count).")
+  dr_freq_table$Nref_count <- ifelse(
+    dr_freq_table$ref_is_mutant,
+    dr_freq_table$n_callable - dr_freq_table$Nref_count,
+    dr_freq_table$Nref_count)
+} else {
+  warning("[stage3] no reference-carries-mutant marker found; dhps A437G is ",
+          "expected to be one. Check DR_variant_info_v2.xlsx.")
+}
+
+# Rename to say what it now means: carriage of the named mutation, not "non-reference".
+dr_freq_table$mutant_count <- dr_freq_table$Nref_count
+
 dr_freq_table$Nref_freq  <- ifelse(dr_freq_table$n_callable > 0,
                                     dr_freq_table$Nref_count / dr_freq_table$n_callable, NA_real_)
 dr_freq_table$Nref_pcnt  <- signif(dr_freq_table$Nref_freq * 100, 3)
@@ -602,7 +672,7 @@ dr_freq_table$Nref_pcnt_95CI <- mapply(function(x, n) {
   } else NA_character_
 }, dr_freq_table$Nref_count, dr_freq_table$n_callable)
 dr_freq_table <- dr_freq_table %>%
-  select(gene, SNP, Mutation, Nref_count, n_callable, n_total,
+  select(gene, SNP, Mutation, callable, Nref_count, n_callable, n_total,
          Nref_freq, Nref_pcnt, Nref_pcnt_95CI)
 dr_freq_table
 

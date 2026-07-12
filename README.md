@@ -1,7 +1,7 @@
 # ampliresist
 
-ONT amplicon variant calling, *Plasmodium falciparum* drug-resistance genotyping,
-and CSP population genetics — **one pipeline, one command**.
+ONT amplicon variant calling and *Plasmodium falciparum* drug-resistance
+genotyping — **one pipeline, one command**.
 
 Adapted from [sanger-pathogens/nano-rave](https://github.com/sanger-pathogens/nano-rave)
 (© 2022, 2023 Genome Research Ltd.).
@@ -55,9 +55,8 @@ The reference amplicon FASTAs (`assets/references/`) and the marker resources
 ```bash
 cd 04_workflow
 
-# 0. one-off: build the two analysis containers
+# 0. one-off: build the analysis container
 docker build -t drag1-downstream:1.0 -f containers/Dockerfile        containers/
-docker build -t drag1-popgen:1.0     -f containers/Dockerfile.popgen containers/
 
 # 1. smoke test — self-contained, uses the bundled dataset in assets/test_data/
 nextflow run . -profile test,docker
@@ -103,11 +102,9 @@ only (`--drug_resistance false`).
 | `--variant_caller` | `clair3` | The validated path. `medaka`, `medaka_haploid`, `freebayes` are inherited from upstream and **not validated for this assay**. |
 | `--clair3_model` | bundled R10.4.1 model | Must match the basecaller chemistry — the Clair3 image ships only R9.4.1 models. |
 | `--clair3_args` | `--no_phasing_for_fa --include_all_ctgs --haploid_precise` | The first two are **required**: Clair3's phasing/contig filters assume human chromosomes and emit no genotypes on small Pf amplicons. `--haploid_precise` because *P. falciparum* is haploid. |
-| `--min_cov` | `10` | Amplicon median coverage **and** per-SNP depth threshold. |
+| `--min_cov` | `50` | Amplicon median coverage **and** per-SNP depth threshold. |
 | `--min_barcode_dir_size` | `10` | MB. If *every* barcode is filtered out the run fails rather than producing nothing. |
 | `--drug_resistance` | `true` | Stages 12–15. |
-| `--population_genetics` | `true` | Stages 17–21 (CSP diversity/structure). |
-| `--csp_*_regions` | see config | Ecological-zone grouping for MAF / Fst / PCA. |
 
 Parameters are validated against `nextflow_schema.json` before any work starts.
 
@@ -120,8 +117,6 @@ Parameters are validated against `nextflow_schema.json` before any work starts.
   03_variants/<run>/vcf/ , vcf_unzipped/
   04_resistance/                     pooled cohort
     01_coverage_qc/  02_genotype_calls/  03_frequencies/  04_summary/
-  05_population_genetics/            pooled cohort
-    ready_vcfs/  population.vcf.gz  maf/  geneflow/  report/
   pipeline_info/                     timeline, report, trace, DAG, software_versions.yml
 ```
 
@@ -175,7 +170,7 @@ produced this way are pseudoreplicated and are not scientifically usable** —
 |---|---|
 | `nextflow run . -profile test,docker -stub-run` | validates the whole channel topology in seconds |
 | `nextflow run . -profile test,docker` | **self-contained** end-to-end run on `assets/test_data/` (2 flowcells × 3 **disjoint** barcodes — genuinely different reads, so it also passes VERIFY_RUNS_DISTINCT). Spans two runs, so it exercises the pooled-cohort path and the (run, barcode) join. |
-| `bin/download_upstream_test_data.py` | fetches the upstream Sanger nano-rave dataset. Checks the alignment/calling core against upstream, but **cannot** exercise the resistance or CSP stages (R9.4.1 chemistry, no Pf panel, no sample sheet). |
+| `bin/download_upstream_test_data.py` | fetches the upstream Sanger nano-rave dataset. Checks the alignment/calling core against upstream, but **cannot** exercise the resistance stages (R9.4.1 chemistry, no Pf panel, no sample sheet). |
 
 ## Layout
 
@@ -190,17 +185,15 @@ modules/local/           one process per file, numbered by execution order
   10_bgzip_tabix · 11_gunzip_vcf
   12_amplicon_coverage … 15_summary_tables      (drug resistance)
   16_dump_versions
-  17_csp_prepare_vcfs … 21_csp_report           (population genetics)
 subworkflows/local/
   01_prepare_reads  02_prepare_references  03_align_and_coverage
-  04_call_variants  05_drug_resistance     06_population_genetics
+  04_call_variants  05_drug_resistance
 bin/                     executables, staged onto PATH inside each task
   make_run_samplesheet.sh  download_upstream_test_data.py
   01_amplicon_coverage.R … 04_summary_tables.R   (+ _setup.R, _pipeline_paths.R)
-  csp_01_prepare_vcfs.sh … csp_07_report_template.Rmd
 assets/
   samplesheet.xlsx  resources/  references/  test_data/  runs.csv  test_runs.csv
-containers/              Dockerfile (R) · Dockerfile.popgen (bcftools/vcftools/plink + R)
+containers/              Dockerfile (R environment for the analysis stages)
 docs/                    analysis policy, marker catalogue, provenance/
 ```
 

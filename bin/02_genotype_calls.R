@@ -370,6 +370,24 @@ col_ord2 <- c("sample_id",
               
 vcf_tbl_all_varinfo2 <- vcf_tbl_all_varinfo2 %>% select(all_of(col_ord2))
 
+# ---------------------------------------------------------------------------
+# COERCE THE NUMERIC FIELDS. vcfR returns the FORMAT fields as CHARACTER, and R
+# then does the wrong thing quietly:
+#
+#   mean(c("0.65","0.66"))  -> NA        (silently!)
+#   sd(c("0.65","0.66"))    -> 0.007     (works - it coerces internally)
+#   "0.9091" >= 0.8         -> STRING comparison, not numeric
+#
+# The string comparison happens to give the right answer for AF in [0,1] purely
+# because lexicographic order coincides with numeric order for same-format
+# decimals - but it is wrong in principle, and it silently defeated the artefact
+# rule (af_mean came out NA for every position, so nothing was ever flagged).
+# ---------------------------------------------------------------------------
+vcf_tbl_all_varinfo2 <- vcf_tbl_all_varinfo2 %>%
+  mutate(across(any_of(c("AF", "DP", "Qual", "Pos")), ~ suppressWarnings(as.numeric(.x))))
+
+stopifnot(is.numeric(vcf_tbl_all_varinfo2$AF), is.numeric(vcf_tbl_all_varinfo2$DP))
+
 head(vcf_tbl_all_varinfo2,15)
 dim(vcf_tbl_all_varinfo2)
 
@@ -385,11 +403,108 @@ dim(vcf_tbl_all_varinfo2)
 hom_alt_gt <- c("1", "1/1", "1|1")
 hom_af_min <- as.numeric(Sys.getenv("NANORAVE_HOM_AF", unset = "0.8"))
 
-vcf_tbl_all_varinfo2$GT_majority <- ifelse(
-  (vcf_tbl_all_varinfo2$GT %in% hom_alt_gt) & (vcf_tbl_all_varinfo2$AF >= hom_af_min),
-  1, 0)
-vcf_tbl_all_varinfo2$GT
-vcf_tbl_all_varinfo2$GT_majority
+# ===========================================================================
+# EXPLICIT THREE-CLASS VARIANT RULE  (replaces the implicit "hom-alt only" rule)
+#
+# Until now, artifact rejection happened only as a SIDE EFFECT of scoring 0/1
+# calls as wild-type. That is fragile: the recurrent ~0.5-AF miscalls (k13 C580Y,
+# mdr1 Y184F, dhps K540N/A581G) were still emitted by the caller and were one
+# rule-change away from re-entering the results as a false "90/92 artemisinin
+# resistant" finding. Make the rejection explicit, data-driven and auditable.
+#
+# The discriminator is the CROSS-SPECIMEN SPREAD of the allele fraction:
+#   * a REAL polymorphism varies between mosquitoes - present in some, absent in
+#     others, and clonal (AF ~0.9-1.0) where present;
+#   * a SYSTEMATIC ERROR appears in nearly EVERY specimen at nearly the SAME
+#     allele fraction (tight sd) - which no biological process produces.
+#
+# Anchored by a biological control: k13 C580Y is essentially absent from Africa
+# (Girgis 2023: none; Nkemngo 2022: none of the WHO-validated list), yet is called
+# in ~95% of specimens at AF 0.535 +/- 0.046. It CANNOT be real. That anchor
+# validates the rule, which then flags mdr1 184 and dhps 540/581 by the same
+# signature. The true C580Y in the KH2 control (GT=1, AF=0.985) is NOT flagged.
+#
+# Classes:
+#   clonal   GT in {1,1/1} & AF >= hom_af_min          -> mutant (1)
+#   mixed    GT 0/1 & AF in [mix_lo, mix_hi]           -> reported, not counted
+#                                                          (majority-consensus, as Girgis)
+#   artifact recurrent + intermediate AF + tight sd    -> NA (locus not callable)
+#   ref      otherwise                                 -> wild type (0)
+# ===========================================================================
+# Recurrence threshold. Calibrated on the RUN23 field cohort (n=94): sweeping it
+# from 0.80 down to 0.20 gives a STABLE flag set from 0.50 downward -- exactly the
+# four known artefact positions (k13 1739, mdr1 551, dhps 1620, dhps 1742) -- and
+# NO genuine variant is caught at any threshold, because the real ones sit at
+# AF 0.84-0.95, above the 0.75 window. 0.40 sits mid-plateau with margin either
+# side. The AF window and the tight sd do the discriminating; recurrence only
+# separates a systematic error from a rare true variant (e.g. crt K76T, 4%).
+art_min_frac <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_MIN_FRAC", unset = "0.40"))
+art_af_lo    <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_AF_LO",   unset = "0.35"))
+art_af_hi    <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_AF_HI",   unset = "0.75"))
+art_max_sd   <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_MAX_SD",  unset = "0.10"))
+art_min_n    <- as.numeric(Sys.getenv("NANORAVE_ARTEFACT_MIN_N",   unset = "5"))
+mix_lo <- 0.25; mix_hi <- 0.75
+
+# Controls are excluded from the artifact statistics: KH2's genuine C580Y (AF~1)
+# would otherwise inflate the mean and sd of that position.
+# Rows with a missing snp_id come from the outer join upstream and are not real
+# positions; grouping them would create a phantom "NA" position and mask calls.
+field_calls <- vcf_tbl_all_varinfo2 %>%
+  filter(!nr_is_control(sample_id), !is.na(snp_id), !is.na(AF))
+n_field_specimens <- dplyr::n_distinct(field_calls$sample_id)
+
+artefact_stats <- field_calls %>%
+  group_by(snp_id) %>%
+  summarise(n_called  = dplyr::n(),
+            af_mean   = mean(AF, na.rm = TRUE),
+            af_sd     = stats::sd(AF, na.rm = TRUE),
+            frac_het  = mean(GT %in% c("0/1", "0|1"), na.rm = TRUE),
+            .groups   = "drop") %>%
+  mutate(
+    frac_specimens = n_called / max(n_field_specimens, 1),
+    af_sd          = ifelse(is.na(af_sd), 0, af_sd),
+    is_artefact    = n_field_specimens >= art_min_n &
+                     frac_specimens >= art_min_frac &
+                     af_mean >= art_af_lo & af_mean <= art_af_hi &
+                     af_sd   <  art_max_sd
+  )
+
+artefact_ids <- artefact_stats$snp_id[artefact_stats$is_artefact]
+artefact_ids <- artefact_ids[!is.na(artefact_ids)]
+
+if (length(artefact_ids) > 0) {
+  message("[stage2] SYSTEMATIC ARTEFACT positions detected (recurrent, intermediate AF, tight sd) - ",
+          "these codons are marked NOT CALLABLE (NA), not wild-type: ",
+          paste(artefact_ids, collapse = ", "))
+} else {
+  message("[stage2] no systematic-artefact positions detected (cohort n=", n_field_specimens, ").")
+}
+
+# Artefact catalogue - a first-class QC deliverable (Table T3 of the blueprint).
+write.csv(artefact_stats %>% arrange(desc(frac_specimens)),
+          file = file.path(analysis_dr_2, paste0(MinION_run_name, "_artefact_catalogue.csv")),
+          row.names = FALSE)
+
+vcf_tbl_all_varinfo2 <- vcf_tbl_all_varinfo2 %>%
+  mutate(
+    call_class = dplyr::case_when(
+      !is.na(snp_id) & snp_id %in% artefact_ids                ~ "artefact",
+      GT %in% hom_alt_gt & AF >= hom_af_min                    ~ "clonal",
+      GT %in% c("0/1", "0|1") & AF >= mix_lo & AF <= mix_hi     ~ "mixed",
+      TRUE                                                     ~ "ref"
+    ),
+    # Majority-consensus scoring (Girgis): only a confident clonal call is a mutant.
+    # An artefact position is NOT callable -> NA (never silently scored wild-type).
+    GT_majority = dplyr::case_when(
+      call_class == "clonal"   ~ 1,
+      call_class == "artefact" ~ NA_real_,
+      TRUE                     ~ 0
+    )
+  )
+
+message("[stage2] call classes: ",
+        paste(names(table(vcf_tbl_all_varinfo2$call_class)),
+              table(vcf_tbl_all_varinfo2$call_class), sep = "=", collapse = "  "))
 
 ## Add a column whether likely het, defined by a cutoff
 het_cutoff = 0.9 # e.g. if using 90%, then non-ref AF >90%==hom-nref or <10%==hom-ref; in between == het
@@ -429,6 +544,64 @@ snp_data_v2 <- snp_data %>%
   select(all_of(snp_data_cols)) %>%
   filter(key_snp == TRUE) %>%
   select(-key_snp)
+
+# ---------------------------------------------------------------------------
+# REFERENCE-POLARITY CORRECTION
+#
+# For most markers the 3D7 reference carries the WILD-TYPE allele, so
+# "non-reference call" == "mutation present". That is NOT universally true.
+#
+# The 3D7 reference genuinely carries the RESISTANT allele at dhps codon 437
+# (reference codon GGT = Gly = 437G; the marker table's own note says "present in
+# 3D7 reference strain"). For that marker, a specimen matching the reference IS
+# the mutant, and a non-reference call is the WILD TYPE. Scoring it like the
+# others reported A437G = 0% when 437G is in fact at ~100% -- the exact opposite.
+# (Girgis 2023 likewise notes the 3D7 dhps haplotype is SGKAA, i.e. 437G.)
+#
+# Rather than hard-code dhps 437, DERIVE the polarity: translate the reference
+# codon from the marker table and compare it with the amino acid the table claims
+# is the reference. Where they disagree, the reference carries the mutant and the
+# genotype must be inverted. This self-corrects for any marker added later.
+# ---------------------------------------------------------------------------
+nr_codon_table <- c(
+  TTT="F",TTC="F",TTA="L",TTG="L",CTT="L",CTC="L",CTA="L",CTG="L",
+  ATT="I",ATC="I",ATA="I",ATG="M",GTT="V",GTC="V",GTA="V",GTG="V",
+  TCT="S",TCC="S",TCA="S",TCG="S",CCT="P",CCC="P",CCA="P",CCG="P",
+  ACT="T",ACC="T",ACA="T",ACG="T",GCT="A",GCC="A",GCA="A",GCG="A",
+  TAT="Y",TAC="Y",CAT="H",CAC="H",CAA="Q",CAG="Q",AAT="N",AAC="N",
+  AAA="K",AAG="K",GAT="D",GAC="D",GAA="E",GAG="E",TGT="C",TGC="C",
+  TGG="W",CGT="R",CGC="R",CGA="R",CGG="R",AGT="S",AGC="S",AGA="R",
+  AGG="R",GGT="G",GGC="G",GGA="G",GGG="G")
+
+snp_data_v2 <- snp_data_v2 %>%
+  mutate(
+    codon_ref_aa   = unname(nr_codon_table[toupper(codon_ref)]),
+    ref_is_mutant  = !is.na(codon_ref_aa) & (codon_ref_aa != aa_ref)
+  )
+
+inverted <- snp_data_v2 %>% filter(ref_is_mutant)
+if (nrow(inverted) > 0) {
+  message("[stage2] reference carries the MUTANT allele at ", nrow(inverted),
+          " marker(s): ", paste(inverted$aa_mut_name, collapse = ", "),
+          ". Raw genotypes are LEFT AS-IS here (the dhps haplotype builder below ",
+          "depends on 'non-reference' semantics); the polarity is corrected when ",
+          "prevalence is reported, in 03_resistance_frequencies.R.")
+} else {
+  warning("[stage2] no reference-carries-mutant marker detected. dhps A437G is ",
+          "expected to be one (3D7 = SGKAA). Check the marker table.")
+}
+
+# IMPORTANT: `genotype` stays as "non-reference call" and is NOT inverted here.
+# The dhps haplotype builder further down already encodes the correct polarity by
+# hand (dhps_1310_GC == 0 -> "SGKAA" i.e. 437G; == 1 -> "SAKAA" i.e. 437A), so
+# inverting the raw genotype would corrupt the haplotype -- the one output that is
+# currently right. The polarity correction is applied at the REPORTING layer, in
+# 03_resistance_frequencies.R, where the per-marker "A437G" prevalence is computed.
+# `ref_is_mutant` is exported below so that stage 3 can do it.
+write.csv(snp_data_v2 %>% select(snp_id, aa_mut_name, aa_ref, aa_alt,
+                                 codon_ref, codon_ref_aa, ref_is_mutant),
+          file = file.path(analysis_dr_2, paste0(MinION_run_name, "_marker_polarity.csv")),
+          row.names = FALSE)
 
 colnames(vcf_tbl_all_varinfo2)
 sample_snp_calls_col <- c("sample_id",
@@ -509,8 +682,30 @@ keysnps_allsamps_gt_novars <- do.call(cbind, mylist_sample_vars)
 # and cbind the snp info back in
 keysnps_allsamps_gt <- cbind(snp_list, keysnps_allsamps_gt_novars)
 
-## Replace NA with wild-type genotype call
+## Replace NA with wild-type genotype call.
+#
+# Legitimate ONLY for the "no variant record" case: a specimen with no call at a
+# codon matches the reference, i.e. wild type = 0.
+#
+# NOT legitimate for an ARTEFACT-masked codon. Those were deliberately set to NA
+# ("not callable"), and a blanket NA -> 0 silently resurrects them as confident
+# WILD-TYPE calls -- re-creating the very "missing == wild type" error this
+# pipeline exists to avoid, and producing a bogus rule-out (e.g. "mdr1 Y184F =
+# 0/447, 95% CI 0-0.8%") for a codon that was never measurable in the first place.
+#
+# So: fill NA -> 0 for the no-call case, then restore NA on the artefact codons.
 keysnps_allsamps_gt <- keysnps_allsamps_gt %>% replace(is.na(.), 0)
+
+if (length(artefact_ids) > 0) {
+  artefact_rows <- keysnps_allsamps_gt$snp_id %in% artefact_ids
+  if (any(artefact_rows)) {
+    sample_cols <- setdiff(names(keysnps_allsamps_gt), "snp_id")
+    keysnps_allsamps_gt[artefact_rows, sample_cols] <- NA
+    message("[stage2] restored NA (not callable) on ", sum(artefact_rows),
+            " artefact codon(s) after the wild-type fill: ",
+            paste(keysnps_allsamps_gt$snp_id[artefact_rows], collapse = ", "))
+  }
+}
 
 
 ############ Check out the drug resistance (minus kelch13) genotype data!
@@ -877,6 +1072,41 @@ snp_calls_t2 %>% filter(dhfr_haplotype=="Other")
 ## dhps
 # Options = AGKAA (436A*, 437G*, 540K, 581A, 613A); or AAKAA (436A*, 437A, 540K, 581A, 613A); or SGKAA (436S, 437G*, 540K, 581A, 613A); or SGEAA (436S, 437G*, 540E*, 581A, 613A)
 # WT = SAKAA; 3D7 = SGKAA
+#
+# ---------------------------------------------------------------------------
+# dhps codon 581 (dhps_1742_CG) is ARTEFACT-MASKED (NA) for the marker-prevalence
+# table, because the position carries a systematic ~0.53-AF heterozygous miscall.
+# But the 5-codon dhps haplotype NEEDS a value at 581, and leaving it NA would
+# turn EVERY dhps haplotype into NA.
+#
+# Judgement call, stated explicitly: for HAPLOTYPE construction only, codon 581 is
+# taken as REFERENCE (581A). Justification - Girgis 2023 reports A581G at 2.0% in
+# Ghana and Amenga-Etego reports it as rare, so a genuine 581G in ~48% of specimens
+# is not credible; the ALT signal is the artefact. Reference is the best estimate.
+#
+# The two outputs therefore say different, and both honest, things:
+#   * haplotype table   -> SGKAA (581 assumed reference; flagged below)
+#   * prevalence table  -> A581G = NOT CALLABLE (we cannot CONFIDENTLY RULE OUT
+#                          low-frequency 581G at a corrupted position)
+# ---------------------------------------------------------------------------
+hap_artefact_codons <- intersect(artefact_ids, c("dhps_1742_CG", "dhps_1620_AT"))
+if (length(hap_artefact_codons) > 0) {
+  message("[stage2] haplotype construction: taking artefact codon(s) ",
+          paste(hap_artefact_codons, collapse = ", "),
+          " as REFERENCE (see comment). The marker table still reports them as NOT CALLABLE.")
+}
+snp_calls_t2$dhps_581_not_callable <- "dhps_1742_CG" %in% artefact_ids
+
+# Remember which cells are artefact-NA, coalesce to reference FOR HAPLOTYPE
+# CONSTRUCTION ONLY, and restore the NA afterwards (see restore block below).
+# Without the restore, the coalesce would permanently overwrite the columns and the
+# marker-prevalence table would report a bogus "0/413, 95% CI 0-0.9%" rule-out for
+# codons that were never callable.
+.hap_fill_cols <- intersect(c("dhps_1742_CG", "dhps_1620_AT"), names(snp_calls_t2))
+.hap_na_mask <- lapply(snp_calls_t2[.hap_fill_cols], is.na)
+snp_calls_t2 <- snp_calls_t2 %>%
+  mutate(across(all_of(.hap_fill_cols), ~ dplyr::coalesce(.x, 0)))
+
 snp_calls_t2 <- within(snp_calls_t2, {
   dhps_haplotype <-
     ifelse( (dhps_1306_TG==1 &
@@ -974,6 +1204,16 @@ snp_calls_t2 %>% count(dhfr_dhps_haplotype) %>% arrange(desc(n))
 # Pyrimethamine = PYR
 # Sulfadoxine = SX
 # https://www.wwarn.org/sites/default/files/drug-abbreviations.pdf
+
+# Haplotypes are built. Restore the artefact NAs so the marker-prevalence table
+# reports those codons as NOT CALLABLE rather than as a confident 0%.
+for (.cc in .hap_fill_cols) {
+  snp_calls_t2[[.cc]][.hap_na_mask[[.cc]]] <- NA
+}
+if (length(.hap_fill_cols) > 0) {
+  message("[stage2] restored artefact NA on ", paste(.hap_fill_cols, collapse = ", "),
+          " after haplotype construction (marker table will show NOT CALLABLE).")
+}
 
 snp_calls_t3 <- within(snp_calls_t2, {
   

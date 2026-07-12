@@ -158,39 +158,6 @@
           "help_text": "Pooling a flowcell twice pseudoreplicates every sample it carries, so the cohort allele frequencies and population structure are not interpretable. Enable this only when deliberately re-using a flowcell to develop the multi-batch path."
         }
       }
-    },
-    "population_genetics": {
-      "title": "CSP population genetics",
-      "type": "object",
-      "description": "Parasite population structure and diversity at the csp (RTS,S/R21 vaccine target) locus. A different question from drug resistance.",
-      "properties": {
-        "population_genetics": {
-          "type": "boolean",
-          "default": true,
-          "description": "Run the CSP population-genetics subworkflow (haplotype diversity, TH2R/TH3R network, MAF, Fst, PCA)"
-        },
-        "csp_contig_rename_map": {
-          "type": "string",
-          "format": "file-path",
-          "exists": true,
-          "description": "TSV mapping amplicon contig names to chromosome-style names (plink requires these)"
-        },
-        "csp_coastal_regions": {
-          "type": "string",
-          "default": "Greater Accra",
-          "description": "Pipe-separated collection_region values forming the Coastal group"
-        },
-        "csp_middlebelt_regions": {
-          "type": "string",
-          "default": "Bono|Ashanti",
-          "description": "Pipe-separated collection_region values forming the Middlebelt group"
-        },
-        "csp_savannah_regions": {
-          "type": "string",
-          "default": "Savannah|North East|Upper West",
-          "description": "Pipe-separated collection_region values forming the Savannah group"
-        }
-      }
     }
   },
   "allOf": [
@@ -208,9 +175,6 @@
     },
     {
       "$ref": "#/defs/generic_options"
-    },
-    {
-      "$ref": "#/defs/population_genetics"
     }
   ]
 }

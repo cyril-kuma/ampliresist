@@ -16,7 +16,6 @@ include { PREPARE_REFERENCES } from './subworkflows/local/02_prepare_references'
 include { ALIGN_AND_COVERAGE } from './subworkflows/local/03_align_and_coverage'
 include { CALL_VARIANTS      } from './subworkflows/local/04_call_variants'
 include { DRUG_RESISTANCE    } from './subworkflows/local/05_drug_resistance'
-include { POPULATION_GENETICS } from './subworkflows/local/06_population_genetics'
 
 include { DUMP_VERSIONS      } from './modules/local/16_dump_versions'
 
@@ -41,7 +40,7 @@ workflow {
         ============================================================
          --allow_duplicate_runs is set: DEVELOPMENT MODE
          Duplicate flowcells will NOT abort the run.
-         Any cohort frequencies or population structure produced are
+         Any cohort allele frequencies produced are
          pseudoreplicated and NOT scientifically usable.
         ============================================================
         """.stripIndent())
@@ -114,15 +113,6 @@ workflow {
         )
     }
 
-    // 06 - CSP population genetics (vaccine-target diversity, not drug resistance).
-    // Also a cohort analysis: it needs every sample in a single merged VCF.
-    if (params.population_genetics) {
-        POPULATION_GENETICS(
-            CALL_VARIANTS.out.vcf.map { meta, vcf, tbi -> [ vcf, tbi ] }.flatten().collect(),
-            file(params.csp_contig_rename_map, checkIfExists: true),
-            file(params.samplesheet, checkIfExists: true)
-        )
-    }
 
     DUMP_VERSIONS(ch_versions.unique().collectFile(name: 'collated_versions.yml'))
 }

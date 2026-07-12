@@ -1,8 +1,84 @@
 # Changelog
 
+## v2.3.0 — 2026-07-12
+
+Genotype-call correctness. Three defects that each silently produced a *confident
+wrong answer* rather than an error, plus a scope cut.
+
+### Fix — `dhps A437G` was reported inverted
+
+The 3D7 reference **carries** 437G (its dhps genotype is `SGKAA`). The frequency
+table nevertheless counted "matches reference" as wild-type, so a locus that is
+**100% mutant** was reported as 0% — and it contradicted the pipeline's own
+haplotype output, which had the polarity hand-encoded correctly.
+
+Polarity is now **derived** from the codon table (`DR_variant_info_v2.xlsx`:
+translate `codon_ref` → if it ≠ `aa_ref`, the reference allele *is* the mutant)
+and applied in the reporting layer, `bin/03_resistance_frequencies.R`. It is
+deliberately **not** applied to the raw genotype matrix, because the dhps
+haplotype builder already depends on the "non-reference" semantics. A
+`<run>_marker_polarity.csv` audit file is emitted.
+
+### Fix — `AF` was a character column
+
+`vcfR` returns INFO fields as strings. `mean(AF)` therefore returned `NA`
+*silently* while `sd(AF)` worked (it coerces internally), and `AF >= 0.8` was a
+**lexicographic** string comparison that happened to give the right answer. All
+of `AF`/`DP`/`Qual`/`Pos` are now coerced with `as.numeric()` and asserted.
+
+### New — explicit 3-class call rule and a systematic-artefact catalogue
+
+Four positions were called in nearly every specimen, always heterozygous, always
+at AF ≈ 0.5 with almost no variance — including k13 **C580Y**, which is
+essentially absent from Africa. 89/94 specimens at AF 0.535 ± 0.046 is not
+biology; it is a systematic mapping/basecalling artefact.
+
+Every call is now classified `clonal` | `mixed` | `artefact` | `ref`. A position
+is an artefact when it is called in ≥40% of field specimens with mean AF in
+[0.40, 0.60] and SD < 0.10 (thresholds are env-configurable; the 0.40 recurrence
+default was chosen from a 0.80→0.20 sweep on the real cohort, where 0.50–0.20 is
+a stable plateau that flags exactly the four known artefacts and never a genuine
+variant — real variants sit at AF 0.84–0.95). Artefact positions report **NOT
+CALLABLE** (`NA`), not wild-type. Catalogue: `<run>_artefact_catalogue.csv`.
+
+Consequence: `mdr1 Y184F`, `dhps K540N` and `dhps A581G` are now correctly
+reported as not callable rather than as confident calls. The SP conclusion is
+unaffected — the quintuple/sextuple hinges on **K540E** (codon 1618), a different
+position, which is genuinely callable and genuinely 0/413.
+
+### New — `per_call.tsv`
+
+`11b PER_CALL_TABLE` flattens each VCF to one row per (sample, position) with
+`GT`, `DP`, `AF` and ref/alt depths, published to `03_variants/<run>/`. The
+analysis stages consume a genotype *matrix*; the evidence behind each cell was
+previously unauditable.
+
+### Changed — `min_cov` default is 50, not 10
+
+Girgis 2023 (>50×) and Runtuwene 2018 (≥50 reads) converge on 50× independently;
+nothing in the curated literature supports 10×. 10× is now the **secondary**
+analysis (`-profile sensitivity_10x`), and a conclusion that holds only at 10× is
+not a conclusion.
+
+### Removed — CSP population genetics
+
+csp is the RTS,S/R21 vaccine target: a different scientific question. Subworkflow
+`06_population_genetics`, modules 17–21, the `csp_*` scripts, and
+`containers/Dockerfile.popgen` are deleted, along with `--population_genetics` and
+`--csp_*_regions`. (csp remains an amplicon in the panel, so its *coverage* is
+still reported as QC.) Recoverable from git history if the question returns.
+
+### Fix — controls collided across flowcells
+
+`Control_KH2`/`NC` are re-sequenced on **every** flowcell, so `sample_id` was not
+unique and the six per-gene merges in stage 1 fanned out to 5⁶ = 15,625 rows.
+`sample_id` is now disambiguated (`KH2__RUN23`) and both control filters match on
+the **base** id — without which the C580Y-carrying control would have leaked into
+the field ART-R frequencies.
+
 ## v2.2.0 — 2026-07-11
 
-Pooled-cohort analysis, CSP population genetics, and a self-contained test suite.
+Pooled-cohort analysis and a self-contained test suite.
 
 ### Correctness — sample mis-assignment when runs are pooled
 
@@ -25,27 +101,10 @@ happened to agree; the order is now restored explicitly and asserted.
 
 ### Analyses run over the pooled cohort
 
-`DRUG_RESISTANCE` and the new `POPULATION_GENETICS` now run **once over every
-flowcell in `--input`**, not once per flowcell — allele frequencies and population
-structure are properties of the sample set, so per-flowcell denominators were
+`DRUG_RESISTANCE` and the new `POPULATION_GENETICS` now ran **once over every
+flowcell in `--input`**, not once per flowcell — allele frequencies are properties of the sample set, so per-flowcell denominators were
 wrong. New `--cohort_name` labels the pooled set. Per-flowcell QC (`01_qc/`,
 `02_coverage/`, `03_variants/`) is still emitted per run.
-
-### New: CSP population genetics (subworkflow 06, modules 17–21)
-
-Integrated from the archived, never-wired analysis. csp is the RTS,S/R21 vaccine
-target, so this is a **different question** from drug resistance: parasite
-population structure and diversity.
-
-`17 CSP_PREPARE_VCFS` → `18 CSP_MERGE_VCFS` → `19 CSP_POPULATION_MAF` →
-`20 CSP_GENEFLOW_PCA` → `21 CSP_REPORT`, producing haplotype diversity, the
-TH2R/TH3R haplotype network, per-zone MAF, nucleotide diversity (π), Tajima's D,
-pairwise F<sub>ST</sub>, PCA, and an HTML report. Ecological-zone grouping is a
-parameter (`--csp_*_regions`), not hard-coded. New container
-`containers/Dockerfile.popgen` (bcftools, vcftools, plink, tabix + pegas,
-adegenet, vcfR, rmarkdown).
-
-`beagle.29Oct24.c8e.jar` was dropped — no script references it.
 
 ### New: self-contained test suite
 
@@ -57,7 +116,7 @@ missed the bug above.
 
 `bin/download_upstream_test_data.py` restores the upstream Sanger fetcher, with a
 header stating its scope: it checks the alignment/calling core, but cannot
-exercise the resistance or CSP stages (R9.4.1 chemistry, no Pf panel, no sample
+exercise the resistance stages (R9.4.1 chemistry, no Pf panel, no sample
 sheet).
 
 Run samplesheets now accept **relative** paths (resolved against `projectDir`), so
