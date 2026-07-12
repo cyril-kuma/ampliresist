@@ -19,7 +19,7 @@ process PER_CALL_TABLE {
     tuple val(run_name), path(vcfs)
 
     output:
-    tuple val(run_name), path("per_call.tsv"), emit: table
+    tuple val(run_name), path("${run_name}_per_call.tsv"), emit: table
 
     script:
     """
@@ -63,16 +63,16 @@ process PER_CALL_TABLE {
 
     cols = ["run_name","barcode","gene","pos","ref","alt","qual","filter",
             "GT","DP","AF","ref_depth","alt_depth"]
-    with open("per_call.tsv", "w", newline="") as fh:
+    with open("${run_name}_per_call.tsv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, delimiter="\\t")
         w.writeheader()
         w.writerows(rows)
 
-    print(f"per_call.tsv: {len(rows)} calls from {len(glob.glob('*.vcf'))} VCFs")
+    print(f"${run_name}_per_call.tsv: {len(rows)} calls from {len(glob.glob('*.vcf'))} VCFs")
     """
 
     stub:
     """
-    printf 'run_name\\tbarcode\\tgene\\tpos\\tref\\talt\\tqual\\tfilter\\tGT\\tDP\\tAF\\tref_depth\\talt_depth\\n' > per_call.tsv
+    printf 'run_name\\tbarcode\\tgene\\tpos\\tref\\talt\\tqual\\tfilter\\tGT\\tDP\\tAF\\tref_depth\\talt_depth\\n' > ${run_name}_per_call.tsv
     """
 }

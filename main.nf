@@ -107,6 +107,7 @@ workflow {
         DRUG_RESISTANCE(
             ALIGN_AND_COVERAGE.out.bedgraphs.collect(),
             CALL_VARIANTS.out.vcfs_plain.collect(),
+            CALL_VARIANTS.out.per_call.map { _run, tsv -> tsv }.collect(),
             ch_run_names,
             file(params.resources, checkIfExists: true),
             file(params.samplesheet, checkIfExists: true)
