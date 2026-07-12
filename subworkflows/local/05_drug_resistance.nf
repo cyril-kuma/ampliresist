@@ -17,8 +17,8 @@
 // exists on every flowcell, so a barcode-only join would mis-assign samples once
 // the runs are pooled.
 //
-// Stages 12 and 13 are independent and run in parallel; 14 needs both; 15 needs
-// all three. They are separate processes because the stages are file-coupled —
+// 12 -> 13 -> 14 -> 15. Stage 13 consumes stage 12's callability table: a
+// specimen below the coverage threshold must be NOT CALLABLE, not wild type. They are separate processes because the stages are file-coupled —
 // each reads the previous blocks off disk — so editing, say, the frequency tables
 // re-runs only stage 14 under -resume.
 //
@@ -41,7 +41,12 @@ workflow DRUG_RESISTANCE {
 
     main:
     AMPLICON_COVERAGE(bedgraphs, run_names, resources, samplesheet)
-    GENOTYPE_CALLS(vcfs, run_names, resources, samplesheet)
+
+    // 13 depends on 12: a genotype cannot be called honestly without knowing
+    // whether the amplicon was callable in that specimen. Without it, a
+    // low-coverage specimen with no variant record is indistinguishable from a
+    // wild-type one, and gets reported as wild type.
+    GENOTYPE_CALLS(AMPLICON_COVERAGE.out.block, vcfs, run_names, resources, samplesheet)
 
     RESISTANCE_FREQUENCIES(
         AMPLICON_COVERAGE.out.block,

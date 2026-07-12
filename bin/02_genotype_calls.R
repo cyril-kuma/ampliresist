@@ -701,27 +701,69 @@ keysnps_allsamps_gt <- cbind(snp_list, keysnps_allsamps_gt_novars)
 
 ## Replace NA with wild-type genotype call.
 #
-# Legitimate ONLY for the "no variant record" case: a specimen with no call at a
-# codon matches the reference, i.e. wild type = 0.
+# Legitimate ONLY when the amplicon was actually CALLABLE in that specimen. Then
+# "no variant record" really does mean "matches the reference", i.e. wild type.
 #
-# NOT legitimate for an ARTEFACT-masked codon. Those were deliberately set to NA
-# ("not callable"), and a blanket NA -> 0 silently resurrects them as confident
-# WILD-TYPE calls -- re-creating the very "missing == wild type" error this
-# pipeline exists to avoid, and producing a bogus rule-out (e.g. "mdr1 Y184F =
-# 0/447, 95% CI 0-0.8%") for a codon that was never measurable in the first place.
+# It is NOT legitimate in two other cases, and a blanket NA -> 0 silently commits
+# both -- re-creating the very "missing == wild type" error this pipeline exists
+# to avoid:
 #
-# So: fill NA -> 0 for the no-call case, then restore NA on the artefact codons.
+#   1. ARTEFACT-masked codons, deliberately set to NA above. Filling them
+#      resurrects them as confident wild-type calls and manufactures a bogus
+#      rule-out for a codon that was never measurable.
+#
+#   2. Specimens BELOW the coverage threshold for that gene. Here "no variant
+#      record" means "we could not see", not "wild type". This one is severe:
+#      dhfr is callable in only ~28% of specimens, so the fill was declaring ~68
+#      of 94 specimens fully wild-type (NCSI) for a gene that was never read in
+#      them -- deflating inferred pyrimethamine resistance from 92% (among
+#      callable specimens) to 25%.
+#
+# So: fill NA -> 0, then restore NA on (a) artefact codons and (b) every
+# (specimen, gene) cell that never reached the coverage threshold.
 keysnps_allsamps_gt <- keysnps_allsamps_gt %>% replace(is.na(.), 0)
+
+sample_cols <- setdiff(names(keysnps_allsamps_gt), "snp_id")
 
 if (length(artefact_ids) > 0) {
   artefact_rows <- keysnps_allsamps_gt$snp_id %in% artefact_ids
   if (any(artefact_rows)) {
-    sample_cols <- setdiff(names(keysnps_allsamps_gt), "snp_id")
     keysnps_allsamps_gt[artefact_rows, sample_cols] <- NA
     message("[stage2] restored NA (not callable) on ", sum(artefact_rows),
             " artefact codon(s) after the wild-type fill: ",
             paste(keysnps_allsamps_gt$snp_id[artefact_rows], collapse = ", "))
   }
+}
+
+## Mask (specimen, gene) cells that never reached the coverage threshold.
+cov_file <- Sys.getenv("NANORAVE_COVERAGE_TABLE", unset = "")
+if (nzchar(cov_file) && file.exists(cov_file)) {
+  cov_tbl  <- readr::read_csv(cov_file, show_col_types = FALSE)
+  cov_cols <- grep("_coverage_above_threshold$", names(cov_tbl), value = TRUE)
+
+  n_masked <- 0L
+  for (cc in cov_cols) {
+    gene <- sub("_coverage_above_threshold$", "", cc)
+    gene_rows <- grepl(paste0("^", gene, "_"), keysnps_allsamps_gt$snp_id)
+    if (!any(gene_rows)) next
+
+    callable <- as.character(cov_tbl[[cc]]) %in% c("TRUE", "true", "1", "yes")
+    uncallable_ids <- cov_tbl$sample_id[!callable]
+    bad_cols <- intersect(sample_cols, as.character(uncallable_ids))
+    if (length(bad_cols) == 0) next
+
+    keysnps_allsamps_gt[gene_rows, bad_cols] <- NA
+    n_masked <- n_masked + length(bad_cols)
+    message("[stage2] ", gene, ": masked ", length(bad_cols),
+            " specimen(s) below the ", min_cov_threshold, "x threshold ",
+            "(NOT wild type - not callable)")
+  }
+  if (n_masked == 0L)
+    message("[stage2] coverage mask: every specimen was callable at every gene")
+} else {
+  stop("[stage2] NANORAVE_COVERAGE_TABLE is not set or missing (", cov_file, ").\n",
+       "  Without per-specimen callability, low-coverage specimens would be filled\n",
+       "  in as WILD TYPE, which deflates every resistance estimate. Refusing to guess.")
 }
 
 

@@ -10,6 +10,7 @@ process GENOTYPE_CALLS {
     container "drag1-downstream:1.0"
 
     input:
+    path coverage_qc     // 01_coverage_qc/ - per-specimen, per-gene callability
     path vcfs
     val  run_names
     path resources
@@ -32,6 +33,12 @@ process GENOTYPE_CALLS {
     export NANORAVE_METADATA_FILE="\$PWD/${samplesheet}"
     export NANORAVE_MULTIPLEX_SHEET='${params.multiplex_sheet}'
     export NANORAVE_RUN_OUTPUT_DIR="\$PWD/run"
+
+    # Per-specimen callability. Without it, specimens below the coverage
+    # threshold get filled in as WILD TYPE, which deflates every resistance
+    # estimate (dhfr is callable in only ~28% of specimens).
+    # -L: the staged directory is a symlink; find will not descend without it.
+    export NANORAVE_COVERAGE_TABLE=\$(find -L ${coverage_qc} -name '*coverage_by_run_sample*.csv' | head -1)
     export NANORAVE_INPUT_DIR="\$PWD/input"
     export NANORAVE_MIN_DP='${params.min_cov}'
 
