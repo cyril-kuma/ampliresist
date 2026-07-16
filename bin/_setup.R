@@ -107,6 +107,13 @@ run_paths <- run_output_dir
 meta <- read_xlsx(metadata_file, sheet = multiplex_run) %>%
   filter(ont_multiplex_group %in% nanorave_runs)
 
+# Optional descriptive columns were present in the original study workbook but
+# are not required for the (run, barcode) join or any resistance calculation.
+# Keep downstream table schemas stable when a cohort workbook omits them.
+for (column in c("patient_id", "notes")) {
+  if (!column %in% names(meta)) meta[[column]] <- NA_character_
+}
+
 if (nrow(meta) == 0) {
   stop("No sample-sheet rows matched ont_multiplex_group in {",
        paste(nanorave_runs, collapse = ", "), "} in ", metadata_file,

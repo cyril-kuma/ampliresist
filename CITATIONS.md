@@ -1,4 +1,4 @@
-# nano-rave: Citations
+# Ampliresist citations
 
 ## [nano-rave](https://github.com/sanger-pathogens/nano-rave)
 

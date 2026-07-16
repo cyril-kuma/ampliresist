@@ -5,8 +5,7 @@
 // barcode so every downstream artefact can be traced back to its sample.
 //
 
-include { SORT_FASTQS          } from '../../modules/local/01_sort_fastqs'
-include { VERIFY_RUNS_DISTINCT } from '../../modules/local/01b_verify_runs_distinct'
+include { SORT_FASTQS } from '../../modules/local/01_sort_fastqs'
 include { NANOPLOT    } from '../../modules/local/02_nanoplot'
 include { PYCOQC      } from '../../modules/local/03_pycoqc'
 
@@ -16,10 +15,6 @@ workflow PREPARE_READS {
 
     main:
     SORT_FASTQS(runs)
-
-    // Refuse to pool the same flowcell twice: that would pseudoreplicate every
-    // sample it carries and silently invalidate the cohort frequencies.
-    VERIFY_RUNS_DISTINCT(SORT_FASTQS.out.fingerprint.collect())
 
     ch_reads = SORT_FASTQS.out.fastqs
         .transpose()

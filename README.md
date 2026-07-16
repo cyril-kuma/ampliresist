@@ -8,42 +8,45 @@ Adapted from [sanger-pathogens/nano-rave](https://github.com/sanger-pathogens/na
 
 ## Overview
 
-Six subworkflows:
+Five subworkflows compose the pipeline:
 
+```mermaid
+flowchart LR
+    accTitle: Ampliresist workflow overview
+    accDescr: Five-subworkflow data flow from sequencing runs and reference amplicons through read preparation, alignment, variant calling, and pooled drug-resistance analysis
+
+    runs[(runs.csv)] --> prepare_reads[01 Prepare reads]
+    refs[(Reference manifest)] --> prepare_refs[02 Prepare references]
+    prepare_reads --> align[03 Align and calculate coverage]
+    prepare_refs --> align
+    align --> call_variants[04 Call variants]
+    align --> drug_resistance[05 Drug-resistance analysis]
+    call_variants --> drug_resistance
+    drug_resistance --> results[(Pooled cohort results)]
 ```
-runs.csv ─> 01 PREPARE_READS ──┐                      ┌─> 05 DRUG_RESISTANCE
-            (sort, nanoplot,   │                      │   12 amplicon coverage ─┐
-             pycoqc)           │                      │   13 genotype calls ────┼─> 14 frequencies
-                               ├─> 03 ALIGN_AND_      │                         └─> 15 summary tables
-            02 PREPARE_        │      COVERAGE ───────┤
-               REFERENCES ─────┘   (minimap2|sort,    │─> 04 CALL_VARIANTS
-            (normalise,             bedtools)         │   (clair3|medaka|freebayes,
-             faidx, mmi)                              │    bgzip/tabix, gunzip)
-                                                      │
-                                                      └─> 06 POPULATION_GENETICS
-                                                          17 prepare ─> 18 merge ─> 19 MAF
-                                                          ─> 20 pi/Tajima's D/Fst/PCA ─> 21 report
-```
 
-Alignment is the fan-out point: every barcode × every reference amplicon
-(95 × 7 = 665 alignments per flowcell).
+The drug-resistance subworkflow produces amplicon coverage (stage 12), genotype
+calls (13), resistance frequencies (14), summary tables (15), and conservative
+complexity-of-infection classifications (17).
 
-**The two analyses run over the pooled cohort**, not per flowcell. Allele
-frequencies and population structure are properties of the *sample set*, so
-splitting them per flowcell would compute the wrong denominators. Per-flowcell QC
-(`01_qc/`, `02_coverage/`, `03_variants/`) is still emitted per run.
+Alignment is the fan-out point: every retained barcode is aligned independently
+to each of the seven reference amplicons.
+
+The drug-resistance analysis runs over the pooled cohort, not per flowcell.
+Allele frequencies are properties of the *sample set*, so splitting them per
+flowcell would compute the wrong denominators. Per-flowcell QC (`01_qc/`,
+`02_coverage/`, `03_variants/`) is still emitted per run.
 
 ## What you need to supply
 
-This repository contains the **pipeline only**. Study data and large binaries are
-deliberately not published here — you provide them:
+Production runs require cohort-specific sequencing data and metadata:
 
-| Not in the repo | Why | How to supply |
+| Input | Requirement | How to supply |
 |---|---|---|
-| `assets/samplesheet.xlsx` | sample metadata, incl. collection GPS coordinates | build your own from `assets/samplesheet.template.csv`, save as `.xlsx`; pass with `--samplesheet` |
-| `assets/test_data/` | real sequencing reads | point `--input` at your own flowcells |
-| `assets/runs.csv` | embeds absolute paths to your data | generate with `bin/make_run_samplesheet.sh` (see `assets/runs.example.csv`) |
-| `assets/references/clair3_models/` | ~78 MB binary | download the model matching your basecalling chemistry from [ONT Rerio](https://github.com/nanoporetech/rerio); pass with `--clair3_model` |
+| Sequencing runs | one ONT flowcell directory per run, containing `fastq_pass/` and a sequencing summary | generate `assets/runs.csv` with `bin/make_run_samplesheet.sh` |
+| `assets/samplesheet.xlsx` | one metadata row per `(ont_multiplex_group, ont_barcode)` | build from `assets/samplesheet.template.csv`; override with `--samplesheet` if needed |
+| `--plot_metadata` | cleaned specimen-level ecological metadata CSV | used exclusively by the roadmap-driven publication-figure module; defaults to `../03_metadata/samplesheet_clean_metadata.csv` |
+| Clair3 model | must match the basecaller chemistry | use the bundled R10.4.1 model or pass a compatible directory with `--clair3_model` |
 
 The reference amplicon FASTAs (`assets/references/`) and the marker resources
 (`assets/resources/`) **are** included — the pipeline needs them to run.
@@ -104,7 +107,7 @@ only (`--drug_resistance false`).
 | `--clair3_args` | `--no_phasing_for_fa --include_all_ctgs --haploid_precise` | The first two are **required**: Clair3's phasing/contig filters assume human chromosomes and emit no genotypes on small Pf amplicons. `--haploid_precise` because *P. falciparum* is haploid. |
 | `--min_cov` | `50` | Amplicon median coverage **and** per-SNP depth threshold. |
 | `--min_barcode_dir_size` | `10` | MB. If *every* barcode is filtered out the run fails rather than producing nothing. |
-| `--drug_resistance` | `true` | Stages 12–15. |
+| `--drug_resistance` | `true` | Stages 12–15, 17, and the consolidated publication-plot stage 18. |
 
 Parameters are validated against `nextflow_schema.json` before any work starts.
 
@@ -117,8 +120,18 @@ Parameters are validated against `nextflow_schema.json` before any work starts.
   03_variants/<run>/vcf/ , vcf_unzipped/
   04_resistance/                     pooled cohort
     01_coverage_qc/  02_genotype_calls/  03_frequencies/  04_summary/
+    05_complexity/
+  05_plots/                          publication SVG/PNG figures and source CSVs
   pipeline_info/                     timeline, report, trace, DAG, software_versions.yml
 ```
+
+`05_plots` includes assay-performance, marker-frequency, UpSet/alluvial
+haplotype, artefact-QC, geographic, mutation-landscape, PCoA, co-occurrence
+network/matrix, average-linkage clustered heatmap, correspondence-analysis,
+mosaic, vector–parasite bipartite, haplotype-network, and forest-interval panels.
+Analyses that the available data cannot
+support (for example volcano plots or host-vector bipartite networks) are not
+fabricated.
 
 ## Safeguards
 
@@ -129,7 +142,6 @@ because each one corresponds to a failure that actually happened:
 
 | Guard | Catches |
 |---|---|
-| `VERIFY_RUNS_DISTINCT` | the **same flowcell supplied twice** in `--input`. Fingerprints each run by hashing its read UUIDs; identical reads abort the run. Pooling a flowcell twice pseudoreplicates every sample it carries and silently invalidates the cohort frequencies. Override with `-profile dev` (see below). |
 | `_setup.R` sample-id uniqueness | controls (KH2, NC) are re-sequenced on **every** flowcell, so `sample_id` is not unique once runs are pooled. Each sequencing instance is disambiguated (`KH2__<run>`); a residual duplicate aborts. |
 | stage 12 fan-out check | the coverage table having more rows than the cohort has samples — the signature of a merge fanning out on a non-unique `sample_id` (one control on 5 runs produced **5⁶ = 15,625** rows). |
 | stage 12 join check | no coverage row matching any `sample_id` — a broken join, not a result. |
@@ -149,48 +161,34 @@ tests/validate_cohort.py --outdir ../05_results/v2 \
 > A clean integer scaling factor between a single run and a pooled cohort is **not**
 > evidence of correctness — it is exactly what duplicated input data looks like.
 
-### Development mode
-
-While the multi-batch path is being built, the same flowcell is deliberately
-copied under several run names so the pooling logic can be exercised before real
-second and third batches exist. `VERIFY_RUNS_DISTINCT` would (correctly) refuse
-that, so use the `dev` profile:
-
-```bash
-nextflow run . -profile docker,dev --input assets/runs.csv --outdir results
-```
-
-It downgrades the abort to a warning and prints a banner in the log. **Results
-produced this way are pseudoreplicated and are not scientifically usable** —
-`dev` is not a switch to reach for on real data.
-
 ## Testing
 
 | | |
 |---|---|
 | `nextflow run . -profile test,docker -stub-run` | validates the whole channel topology in seconds |
-| `nextflow run . -profile test,docker` | **self-contained** end-to-end run on `assets/test_data/` (2 flowcells × 3 **disjoint** barcodes — genuinely different reads, so it also passes VERIFY_RUNS_DISTINCT). Spans two runs, so it exercises the pooled-cohort path and the (run, barcode) join. |
+| `nextflow run . -profile test,docker` | **self-contained** end-to-end run on `assets/test_data/` (2 flowcells × 3 **disjoint** barcodes). Spans two runs, so it exercises the pooled-cohort path and the (run, barcode) join. |
 | `bin/download_upstream_test_data.py` | fetches the upstream Sanger nano-rave dataset. Checks the alignment/calling core against upstream, but **cannot** exercise the resistance stages (R9.4.1 chemistry, no Pf panel, no sample sheet). |
 
 ## Layout
 
 ```
-main.nf                  entry workflow — thin; composes the six subworkflows
+main.nf                  entry workflow — thin; composes five subworkflows
 nextflow.config          params, profiles, reporting
 nextflow_schema.json     parameter validation (nf-schema)
 conf/                    base (resources) · modules (publishDir, ext.args) · test
 modules/local/           one process per file, numbered by execution order
   01_sort_fastqs … 08_bedtools_genomecov
   09a_clair3 / 09b_medaka / 09c_medaka_haploid / 09d_freebayes   (alternatives)
-  10_bgzip_tabix · 11_gunzip_vcf
+  10_bgzip_tabix · 11_gunzip_vcf · 11b_per_call_table
   12_amplicon_coverage … 15_summary_tables      (drug resistance)
-  16_dump_versions
+  16_dump_versions · 17_complexity_of_infection
 subworkflows/local/
   01_prepare_reads  02_prepare_references  03_align_and_coverage
   04_call_variants  05_drug_resistance
 bin/                     executables, staged onto PATH inside each task
   make_run_samplesheet.sh  download_upstream_test_data.py
-  01_amplicon_coverage.R … 04_summary_tables.R   (+ _setup.R, _pipeline_paths.R)
+  01_amplicon_coverage.R … 04_summary_tables.R · 06_complexity_of_infection.R
+  (+ _setup.R, _pipeline_paths.R)
 assets/
   samplesheet.xlsx  resources/  references/  test_data/  runs.csv  test_runs.csv
 containers/              Dockerfile (R environment for the analysis stages)
@@ -205,5 +203,5 @@ docs/                    analysis policy, marker catalogue, provenance/
   before a long run, not during one.
 - Editing `nextflow.config` also invalidates the cache; use `-c my.config` for
   one-off overrides.
-- The two analysis images are built locally and are not in a registry.
+- The downstream analysis image is built locally and is not in a registry.
 - Retired material is in `../07_archive/`.

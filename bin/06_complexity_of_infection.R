@@ -49,8 +49,21 @@ artefact_csv   <- args[2]                        # <cohort>_artefact_catalogue.c
 min_cov        <- as.numeric(args[3])            # depth threshold, e.g. 50
 out_tsv        <- args[4]
 
+# Read all per-call files with one stable schema. AF is deliberately character:
+# biallelic records contain one value (e.g. 0.48), while multiallelic records
+# contain one value per ALT allele (e.g. 0.46,0.27). Letting readr infer each
+# file independently makes the former double and the latter character, which
+# cannot be combined with bind_rows().
 calls <- bind_rows(lapply(per_call_files, function(f)
-  readr::read_tsv(f, show_col_types = FALSE)))
+  readr::read_tsv(
+    f,
+    col_types = readr::cols(.default = readr::col_character()),
+    show_col_types = FALSE
+  ))) %>%
+  mutate(
+    pos = as.numeric(pos),
+    DP  = as.numeric(DP)
+  )
 
 if (nrow(calls) == 0) stop("[coi] no calls read from per_call.tsv")
 
@@ -58,6 +71,38 @@ if (nrow(calls) == 0) stop("[coi] no calls read from per_call.tsv")
 # the two tables key on the same thing.
 calls <- calls %>%
   mutate(snp_id = paste0(gene, "_", pos, "_", ref, alt))
+
+# Return whether GT contains at least two distinct called alleles. This covers
+# 0/1 and 0|1 as before, plus multiallelic genotypes such as 1/2.
+is_heterozygous <- function(gt) {
+  if (is.na(gt) || gt == "") return(FALSE)
+  alleles <- strsplit(gt, "[/|]")[[1]]
+  alleles <- alleles[alleles != "" & alleles != "."]
+  length(alleles) >= 2 && length(unique(alleles)) >= 2
+}
+
+# FORMAT/AF contains one frequency per ALT allele; the reference frequency is
+# the remainder. For a heterozygous genotype, select the frequencies of its
+# called alleles and return the smaller one. Thus 0/1 uses min(1-AF1, AF1),
+# while 1/2 uses min(AF1, AF2) instead of discarding the multiallelic call.
+minor_allele_fraction <- function(gt, af) {
+  if (!is_heterozygous(gt) || is.na(af) || af == "") return(NA_real_)
+
+  alt_af <- suppressWarnings(as.numeric(strsplit(af, ",", fixed = TRUE)[[1]]))
+  if (length(alt_af) == 0 || anyNA(alt_af)) return(NA_real_)
+
+  allele_af <- c(max(0, 1 - sum(alt_af)), alt_af)
+  allele_ids <- suppressWarnings(as.integer(strsplit(gt, "[/|]")[[1]]))
+  if (anyNA(allele_ids) || any(allele_ids + 1 > length(allele_af))) return(NA_real_)
+
+  min(allele_af[allele_ids + 1])
+}
+
+calls <- calls %>%
+  mutate(
+    is_het = vapply(GT, is_heterozygous, logical(1)),
+    minor_af = mapply(minor_allele_fraction, GT, AF)
+  )
 
 artefacts <- readr::read_csv(artefact_csv, show_col_types = FALSE) %>%
   filter(is_artefact) %>%
@@ -71,15 +116,15 @@ coi <- calls %>%
   group_by(run_name, barcode) %>%
   summarise(
     n_sites_called   = dplyr::n(),
-    n_het_all        = sum(GT %in% c("0/1", "0|1")),
-    n_het_real       = sum(GT %in% c("0/1", "0|1") & !snp_id %in% artefacts),
-    genes_with_het   = paste(sort(unique(gene[GT %in% c("0/1", "0|1") &
+    n_het_all        = sum(is_het),
+    n_het_real       = sum(is_het & !snp_id %in% artefacts),
+    genes_with_het   = paste(sort(unique(gene[is_het &
                                               !snp_id %in% artefacts])), collapse = ";"),
     # At a het site the minor allele fraction indexes how balanced the clones are.
     # min(AF, 1-AF) so it is symmetric regardless of which allele is 'alt'.
     mean_minor_af    = ifelse(n_het_real > 0,
-                              mean(pmin(AF, 1 - AF)[GT %in% c("0/1", "0|1") &
-                                                    !snp_id %in% artefacts]),
+                              mean(minor_af[is_het & !snp_id %in% artefacts],
+                                   na.rm = TRUE),
                               NA_real_),
     .groups = "drop") %>%
   mutate(

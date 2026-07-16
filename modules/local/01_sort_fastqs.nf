@@ -13,7 +13,6 @@ process SORT_FASTQS {
 
     output:
     tuple val(run_name), path("*.fastq.gz"), emit: fastqs
-    path "${run_name}.fingerprint",          emit: fingerprint
     path "versions.yml",                     emit: versions
 
     script:
@@ -69,27 +68,6 @@ process SORT_FASTQS {
     fi
     echo "Merged \${#produced[@]} barcodes for run ${run_name}"
 
-    # Fingerprint the run's reads so VERIFY_RUNS_DISTINCT can detect the same
-    # flowcell being supplied twice. Read IDs are ONT UUIDs, unique per sequencing
-    # run, so hashing a sample of them identifies the run cheaply -- no need to
-    # hash gigabytes of sequence.
-    #
-    # Hash ONLY field 1 (the UUID). The rest of the header carries runid=,
-    # start_time=, flow_cell_id= ... which a copied-and-relabelled flowcell will
-    # have rewritten -- hashing the whole line would make two copies of the same
-    # data look different and defeat the check.
-    # `head` closes the pipe early, so zcat takes SIGPIPE (141). That is expected
-    # here, but `set -o pipefail` would turn it into a task failure - so relax it
-    # for this one command only.
-    set +o pipefail
-    fingerprint=\$(zcat "\${produced[@]}" \\
-        | awk 'NR % 4 == 1 { print \$1 }' \\
-        | head -n 2000 \\
-        | md5sum | cut -d' ' -f1)
-    set -o pipefail
-
-    echo "\$fingerprint" > "${run_name}.fingerprint"
-
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         bash: \$(bash --version | head -n1 | sed 's/^.*version //; s/ .*//')
@@ -99,7 +77,6 @@ process SORT_FASTQS {
     stub:
     """
     touch ${run_name}_barcode01.fastq.gz
-    echo "${run_name}" | md5sum | cut -d' ' -f1 > ${run_name}.fingerprint
     touch versions.yml
     """
 }

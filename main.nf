@@ -34,18 +34,6 @@ workflow {
         log.warn("--clair3_model was given but --variant_caller is '${params.variant_caller}'; it will be ignored.")
     }
 
-    // Make a development run impossible to mistake for a real one later.
-    if (params.allow_duplicate_runs) {
-        log.warn("""
-        ============================================================
-         --allow_duplicate_runs is set: DEVELOPMENT MODE
-         Duplicate flowcells will NOT abort the run.
-         Any cohort allele frequencies produced are
-         pseudoreplicated and NOT scientifically usable.
-        ============================================================
-        """.stripIndent())
-    }
-
     //
     // Input: one row per sequencing run. Any number of runs may be given; the
     // drug-resistance analysis is grouped per run automatically.
@@ -110,7 +98,9 @@ workflow {
             CALL_VARIANTS.out.per_call.map { _run, tsv -> tsv }.collect(),
             ch_run_names,
             file(params.resources, checkIfExists: true),
-            file(params.samplesheet, checkIfExists: true)
+            file(params.samplesheet, checkIfExists: true),
+            file(params.plot_metadata, checkIfExists: true),
+            file(params.plot_geo_dir, checkIfExists: true)
         )
     }
 

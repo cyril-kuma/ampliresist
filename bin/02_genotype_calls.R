@@ -1247,9 +1247,14 @@ snp_calls_t2 %>% filter(dhps_haplotype=="Other")
 # Options = dhfr-IRNI + dhps-AGKAA (436A*, 437G*, 540K, 581A, 613A); or AAKAA (436A*, 437A, 540K, 581A, 613A); or SGKAA (436S, 437G*, 540K, 581A, 613A)
 snp_calls_t2 %>% count(dhfr_haplotype, dhps_haplotype)
 
+# paste0() does NOT propagate NA -- it stringifies it. Left alone, a specimen
+# where dhfr was not callable becomes the literal haplotype "dhfr-NA, dhps-SGKAA",
+# which then gets counted and plotted as though it were a real genotype. The
+# combined haplotype is only defined when BOTH components are.
 snp_calls_t2 <- within(snp_calls_t2, {
   dhfr_dhps_haplotype <-
-    paste0( "dhfr-", dhfr_haplotype, ", dhps-", dhps_haplotype)
+    ifelse(is.na(dhfr_haplotype) | is.na(dhps_haplotype), NA_character_,
+           paste0("dhfr-", dhfr_haplotype, ", dhps-", dhps_haplotype))
 })
 
 snp_calls_t2 %>% print(n=23, width=Inf)

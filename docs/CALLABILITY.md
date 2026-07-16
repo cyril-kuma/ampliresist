@@ -1,7 +1,8 @@
-# Callability: why three codons are reported NOT CALLABLE
+# Callability: why four positions are reported NOT CALLABLE
 
-`mdr1 Y184F`, `dhps K540N` and `dhps A581G` are reported as **NOT CALLABLE**
-rather than as a frequency. This document is the evidence for that decision.
+`mdr1 Y184F`, `k13 C580Y`, `dhps K540N`, and `dhps A581G` are reported as
+**NOT CALLABLE** rather than as frequencies. This document is the evidence for
+that decision.
 
 It matters because the alternative — reporting them — would have been *wrong in
 the confident direction*. `mdr1 Y184F` in particular is a real, common West

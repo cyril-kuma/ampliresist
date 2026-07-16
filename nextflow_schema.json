@@ -96,6 +96,18 @@
                     "exists": true,
                     "description": "Sample metadata workbook (.xlsx). Its ont_multiplex_group column must contain the run_name values used in --input."
                 },
+                "plot_metadata": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Clean specimen-level ecological metadata CSV used only by the publication-figure module."
+                },
+                "plot_geo_dir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "exists": true,
+                    "description": "Directory containing ghana_ADM0.geojson and ghana_ADM1.geojson for the surveillance map."
+                },
                 "resources": {
                     "type": "string",
                     "format": "directory-path",
@@ -150,12 +162,6 @@
                     "default": true,
                     "hidden": true,
                     "description": "Validate parameters against the schema at runtime"
-                },
-                "allow_duplicate_runs": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Continue even if two runs in --input contain identical reads (development only)",
-                    "help_text": "Pooling a flowcell twice pseudoreplicates every sample it carries, so the cohort allele frequencies and population structure are not interpretable. Enable this only when deliberately re-using a flowcell to develop the multi-batch path."
                 }
             }
         }

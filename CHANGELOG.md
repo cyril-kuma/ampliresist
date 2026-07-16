@@ -1,5 +1,49 @@
 # Changelog
 
+## Roadmap-driven publication figures
+
+- Replaced the exploratory eight-figure suite with five manuscript figures that follow the project visualization roadmap: geographic haplotype surveillance, multigenic UpSet intersections, ecological resistance abacus, vector/feeding complexity, and adjusted effect-size forest plots.
+- Added `--plot_metadata` for `samplesheet_clean_metadata.csv`, kept separate from the run/barcode workbook required by upstream genotyping.
+- Publication figures now consume the finalized complexity-of-infection block and export PNG, SVG, PDF and figure-source CSV files.
+
+## Unreleased
+
+### Added
+
+- Consolidated the three overlapping publication-figure programs into
+  `bin/07_build_publication_figures.py` and added the terminal
+  `PUBLICATION_PLOTS` process. Publication SVG/300-dpi PNG figures and their
+  source CSVs now publish reproducibly to `<outdir>/05_plots`.
+- Added data-supported mutation-landscape, PCoA, marker co-occurrence network,
+  bioclimatic-zone forest interval, UpSet, alluvial, and integrated multi-panel
+  views while preserving missing genotypes as not callable.
+- Added a literature-audit report plus average-linkage clustered mutation
+  landscapes, co-occurrence heatmaps, correspondence analysis, vector-species
+  mosaics, vector–parasite bipartite graphs, and `pfdhfr` haplotype networks.
+
+### Fixed
+
+- Allowed cohort workbooks to omit the optional `patient_id` and `notes`
+  annotation columns; the shared metadata loader now supplies blank values while
+  preserving the required `(ont_multiplex_group, ont_barcode)` join contract.
+- Made complexity-of-infection parsing multiallelic-aware. Per-call `AF` values
+  now use a stable input type, genotypes such as `1/2` are recognized as
+  heterozygous, and their minor fraction is calculated from the frequencies of
+  the called alleles instead of aborting while combining runs.
+
+### Removed
+
+- Removed the locally added `VERIFY_RUNS_DISTINCT` process and its read-ID
+  fingerprinting from `SORT_FASTQS`.
+- Removed the associated `allow_duplicate_runs` parameter, `dev` profile,
+  workflow warning, publish configuration, schema entry, and documentation.
+- Removed the locally added `INTEGRATE_METADATA` process, its optional Objective
+  1/2 metadata branch, the `qpcr_metadata` and `host_calls` parameters, and its
+  dedicated `07_integrate_metadata.R` script.
+- Removed the hard-coded duplicate figure renderers
+  `08_build_journal_redesign_figures.py` and
+  `09_build_publication_ready_figures.py`.
+
 ## v2.3.0 — 2026-07-12
 
 Genotype-call correctness. Three defects that each silently produced a *confident
