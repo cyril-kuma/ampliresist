@@ -3,7 +3,7 @@
 process NANOPLOT {
     tag "${meta.id}"
     label 'process_low'
-    container "quay.io/biocontainers/nanoplot:1.38.0--pyhdfd78af_0"
+    container "quay.io/biocontainers/nanoplot@sha256:57cffeb19b67d88126a8251069771190a65f73ec694fb2e496e0b4f1a98ef4ab"  // nanoplot 1.38.0
 
     input:
     tuple val(meta), path(fastq)

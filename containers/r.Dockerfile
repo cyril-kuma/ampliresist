@@ -1,7 +1,11 @@
-# R environment for the drug-resistance analysis stages (modules 12-15).
+# ampliresist-r — ampliresist-owned R runtime for the drug-resistance analysis
+# stages (modules 12-15, 17). Formerly tagged `drag1-downstream:1.0`; renamed so
+# the image name reflects the pipeline that owns it.
 #
 # Build:
-#   docker build -t drag1-downstream:1.0 -f containers/Dockerfile containers/
+#   docker build -t ghcr.io/owner/ampliresist-r:1.0.0 -f containers/r.Dockerfile containers/
+#
+# (Replace `owner` with your GitHub org/user before `docker push`.)
 #
 # Unrelated to the upstream nano-rave Dockerfile, which was an all-in-one dev
 # image (minimap2 + sniffles + bedtools + samtools + Java + Nextflow) for running

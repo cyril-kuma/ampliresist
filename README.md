@@ -43,13 +43,21 @@ Production runs require cohort-specific sequencing data and metadata:
 
 | Input | Requirement | How to supply |
 |---|---|---|
-| Sequencing runs | one ONT flowcell directory per run, containing `fastq_pass/` and a sequencing summary | generate `assets/runs.csv` with `bin/make_run_samplesheet.sh` |
-| `assets/samplesheet.xlsx` | one metadata row per `(ont_multiplex_group, ont_barcode)` | build from `assets/samplesheet.template.csv`; override with `--samplesheet` if needed |
-| `--plot_metadata` | cleaned specimen-level ecological metadata CSV | used exclusively by the roadmap-driven publication-figure module; defaults to `../03_metadata/samplesheet_clean_metadata.csv` |
-| Clair3 model | must match the basecaller chemistry | use the bundled R10.4.1 model or pass a compatible directory with `--clair3_model` |
+| Sequencing runs | canonical layout `<data>/<run>/<flowcell>/{fastq_pass/, sequencing_summary_*.txt}` | generate `assets/runs.csv` with `bin/make_run_samplesheet.sh` (validates the layout) |
+| `--samplesheet` | one metadata row per `(ont_multiplex_group, ont_barcode)`; **`.xlsx`**, sheet `samplesheet` | **required** for the resistance analysis; build from `assets/samplesheet.template.csv` |
+| Clair3 model | must match the basecaller chemistry | bundled/downloaded R10.4.1 model (`assets/references/clair3_models/PROVENANCE.md`) or `--clair3_model <dir>` |
 
-The reference amplicon FASTAs (`assets/references/`) and the marker resources
-(`assets/resources/`) **are** included — the pipeline needs them to run.
+The cleaned ecological metadata for the figures is **derived from `--samplesheet`
+inside the workflow** (module `18a` `CLEAN_METADATA`) and passed to plotting by
+channel — it is no longer a separately maintained file. `--plot_metadata` remains
+only as an optional override for standalone plotting.
+
+The reference amplicon FASTAs (`assets/references/`, 5 drug-resistance loci —
+`crt dhfr dhps mdr1 k13` — plus 2 antigen/diversity loci, `csp` and `msp1`; see
+`assets/references/PROVENANCE.md`), the marker resources (`assets/resources/`) and
+the Ghana boundary assets (`assets/geo/`, geoBoundaries, CC BY 4.0) **are** included.
+The Clair3 R10.4.1 model is obtained per `assets/references/clair3_models/PROVENANCE.md`.
+`csp` and `msp1` are **not** drug-resistance genes.
 
 `run_name` in `--input` must match `ont_multiplex_group` in the sample sheet.
 
@@ -58,21 +66,28 @@ The reference amplicon FASTAs (`assets/references/`) and the marker resources
 ```bash
 cd 04_workflow
 
-# 0. one-off: build the analysis container
-docker build -t drag1-downstream:1.0 -f containers/Dockerfile        containers/
+# 0. one-off: build the two ampliresist-owned images (see docs/containers.md;
+#    replace 'owner' with your registry namespace)
+docker build -t ghcr.io/owner/ampliresist-r:1.0.0       -f containers/r.Dockerfile       containers/
+docker build -t ghcr.io/owner/ampliresist-figures:1.0.0 -f containers/figures.Dockerfile containers/
 
-# 1. smoke test — self-contained, uses the bundled dataset in assets/test_data/
+# 1. smoke test — self-contained (bundled test data + workbook)
 nextflow run . -profile test,docker
 
-# 2. build the run samplesheet by scanning the data directory
+# 2. build the run manifest by scanning the (canonical-layout) data directory
 bin/make_run_samplesheet.sh ../02_data > assets/runs.csv
 
 # 3. full run — all flowcells, one command
-nextflow run . -profile docker --input assets/runs.csv --outdir ../05_results -resume
+nextflow run . -profile docker \
+    --input assets/runs.csv \
+    --samplesheet /path/to/samplesheet.xlsx \
+    --outdir ../05_results -resume
 ```
 
-Only `--input` is required; references, Clair3 model, sample sheet and resources
-all default under `assets/`.
+`--input` and `--samplesheet` are required; references, Clair3 model, geo and
+resources default under `assets/`. Public tool images are pinned by digest; the
+two owned images resolve through `--container_registry` (default `ghcr.io/owner`).
+See **[docs/containers.md](docs/containers.md)** for build/pull/publish.
 
 ## Inputs
 
@@ -100,7 +115,9 @@ only (`--drug_resistance false`).
 
 | Parameter | Default | Notes |
 |---|---|---|
-| `--input` | *(required)* | Run samplesheet |
+| `--input` | *(required)* | Run manifest (`run_name,sequencing_dir,sequencing_summary`) |
+| `--samplesheet` | *(required for `--drug_resistance`)* | Metadata workbook (`.xlsx`, sheet `samplesheet`); cleaned figure metadata is derived from it |
+| `--container_registry` | `ghcr.io/owner` | Namespace for the ampliresist-owned images; replace `owner`. Public images are digest-pinned in-module |
 | `--cohort_name` | `DRAG1_cohort` | Names the pooled sample set in the analysis outputs |
 | `--variant_caller` | `clair3` | The validated path. `medaka`, `medaka_haploid`, `freebayes` are inherited from upstream and **not validated for this assay**. |
 | `--clair3_model` | bundled R10.4.1 model | Must match the basecaller chemistry — the Clair3 image ships only R9.4.1 models. |
@@ -166,7 +183,9 @@ tests/validate_cohort.py --outdir ../05_results/v2 \
 | | |
 |---|---|
 | `nextflow run . -profile test,docker -stub-run` | validates the whole channel topology in seconds |
-| `nextflow run . -profile test,docker` | **self-contained** end-to-end run on `assets/test_data/` (2 flowcells × 3 **disjoint** barcodes). Spans two runs, so it exercises the pooled-cohort path and the (run, barcode) join. |
+| `nextflow run . -profile test,docker` | **self-contained** end-to-end run on `assets/test_data/` (2 flowcells × 3 **disjoint** barcodes) with the bundled workbook `tests/fixtures/test_samplesheet.xlsx`. Spans two runs, so it exercises the pooled-cohort path and the (run, barcode) join. |
+| `tests/test_run_discovery.sh` | canonical discovery + malformed-layout / ambiguity / duplicate / deprecation checks (synthetic fixtures) |
+| `tests/test_containers.sh` | every active image is digest-pinned or owned; no stale cross-pipeline references |
 | `bin/download_upstream_test_data.py` | fetches the upstream Sanger nano-rave dataset. Checks the alignment/calling core against upstream, but **cannot** exercise the resistance stages (R9.4.1 chemistry, no Pf panel, no sample sheet). |
 
 ## Layout
@@ -182,17 +201,21 @@ modules/local/           one process per file, numbered by execution order
   10_bgzip_tabix · 11_gunzip_vcf · 11b_per_call_table
   12_amplicon_coverage … 15_summary_tables      (drug resistance)
   16_dump_versions · 17_complexity_of_infection
+  18_publication_plots · 18a_clean_metadata      (figures + derived metadata)
 subworkflows/local/
   01_prepare_reads  02_prepare_references  03_align_and_coverage
   04_call_variants  05_drug_resistance
 bin/                     executables, staged onto PATH inside each task
   make_run_samplesheet.sh  download_upstream_test_data.py
   01_amplicon_coverage.R … 04_summary_tables.R · 06_complexity_of_infection.R
+  08_clean_metadata.R    (derives cleaned figure metadata from the workbook)
   (+ _setup.R, _pipeline_paths.R)
 assets/
-  samplesheet.xlsx  resources/  references/  test_data/  runs.csv  test_runs.csv
-containers/              Dockerfile (R environment for the analysis stages)
-docs/                    analysis policy, marker catalogue, provenance/
+  resources/  references/ (+ PROVENANCE.md, clair3_models/PROVENANCE.md)
+  geo/ (geoBoundaries + PROVENANCE.md)  test_data/  runs.csv
+containers/              r.Dockerfile (ampliresist-r) · figures.Dockerfile (ampliresist-figures)
+docs/                    containers.md · analysis policy · marker catalogue · provenance/
+tests/                   validate_cohort.py · test_run_discovery.sh · test_containers.sh · fixtures/
 ```
 
 ## Notes

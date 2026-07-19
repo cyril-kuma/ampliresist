@@ -3,7 +3,7 @@
 process SAMTOOLS_FAIDX {
     tag "${meta.id}"
     label 'process_single'
-    container "quay.io/biocontainers/samtools:1.15.1--h1170115_0"
+    container "quay.io/biocontainers/samtools@sha256:c3e0ba2add590177a2e6ea33ae9074dc1f82b99e6913338d3d1c3a70dc78b518"  // samtools 1.15.1
 
     input:
     tuple val(meta), path(fasta)

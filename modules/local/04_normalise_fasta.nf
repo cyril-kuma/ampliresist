@@ -7,7 +7,7 @@
 process NORMALISE_FASTA {
     tag "${meta.id}"
     label 'process_single'
-    container "quay.io/biocontainers/biopython:1.78"
+    container "quay.io/biocontainers/biopython@sha256:8bdeb52fb15b5f61c40292f73d85a3a77cda4bbd95d29e710ddaad7a6bf76720"  // biopython 1.78
 
     input:
     tuple val(meta), path(fasta)

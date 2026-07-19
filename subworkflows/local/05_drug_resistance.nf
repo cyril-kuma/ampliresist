@@ -27,6 +27,7 @@ include { GENOTYPE_CALLS         } from '../../modules/local/13_genotype_calls'
 include { RESISTANCE_FREQUENCIES } from '../../modules/local/14_resistance_frequencies'
 include { SUMMARY_TABLES         } from '../../modules/local/15_summary_tables'
 include { COMPLEXITY_OF_INFECTION } from '../../modules/local/17_complexity_of_infection'
+include { CLEAN_METADATA          } from '../../modules/local/18a_clean_metadata'
 include { PUBLICATION_PLOTS       } from '../../modules/local/18_publication_plots'
 
 workflow DRUG_RESISTANCE {
@@ -36,9 +37,8 @@ workflow DRUG_RESISTANCE {
     per_calls     // [ per_call.tsv, ... ] every run, collected
     run_names     // val: list of run ids in the cohort
     resources     // path: assets/resources
-    samplesheet   // path: sample metadata .xlsx
-    plot_metadata // path: cleaned ecological metadata .csv
-    geo_dir       // path: Ghana boundary GeoJSON directory
+    samplesheet   // path: sample metadata workbook (.xlsx) — authoritative
+    geo_dir       // path: Ghana boundary GeoJSON directory (assets/geo)
 
     main:
     AMPLICON_COVERAGE(bedgraphs, run_names, resources, samplesheet)
@@ -67,13 +67,23 @@ workflow DRUG_RESISTANCE {
     // polygenomic.
     COMPLEXITY_OF_INFECTION(per_calls, GENOTYPE_CALLS.out.block)
 
+    // Cleaned ecological metadata is DERIVED from the authoritative workbook
+    // inside the workflow (default) and propagated to stage 18 by channel.
+    // --plot_metadata overrides it only for standalone/independent plotting.
+    if (params.plot_metadata) {
+        ch_plot_metadata = channel.value(file(params.plot_metadata, checkIfExists: true))
+    } else {
+        CLEAN_METADATA(SUMMARY_TABLES.out.block, samplesheet)
+        ch_plot_metadata = CLEAN_METADATA.out.clean_metadata
+    }
+
     // Roadmap-driven figures integrate resistance, callability, complexity and
     // cleaned ecological metadata, and run once per pooled cohort.
     PUBLICATION_PLOTS(
         SUMMARY_TABLES.out.block,
         GENOTYPE_CALLS.out.block,
         COMPLEXITY_OF_INFECTION.out.block,
-        plot_metadata,
+        ch_plot_metadata,
         geo_dir
     )
 

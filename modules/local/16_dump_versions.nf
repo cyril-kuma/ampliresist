@@ -2,7 +2,7 @@
 
 process DUMP_VERSIONS {
     label 'process_single'
-    container "quay.io/biocontainers/python:3.10"
+    container "quay.io/biocontainers/python@sha256:f6b44640f06e8265ebf5ce85ca12cea53af110c188d6b4acf5f59887c24abb8f"  // python 3.10
 
     input:
     path versions

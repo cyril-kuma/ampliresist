@@ -100,13 +100,13 @@
                     "type": "string",
                     "format": "file-path",
                     "exists": true,
-                    "description": "Clean specimen-level ecological metadata CSV used only by the publication-figure module."
+                    "description": "OPTIONAL override of the cleaned ecological metadata CSV for stage 18. By default it is DERIVED from --samplesheet inside the workflow (CLEAN_METADATA, module 18a) and passed to plotting by channel; set this only for standalone/independent plotting."
                 },
                 "plot_geo_dir": {
                     "type": "string",
                     "format": "directory-path",
                     "exists": true,
-                    "description": "Directory containing ghana_ADM0.geojson and ghana_ADM1.geojson for the surveillance map."
+                    "description": "Directory with ghana_ADM0.geojson and ghana_ADM1.geojson (CRS84/EPSG:4326). Defaults to the vendored assets/geo (geoBoundaries, CC BY 4.0); override to supply your own boundaries."
                 },
                 "resources": {
                     "type": "string",
@@ -121,10 +121,10 @@
                 },
                 "min_cov": {
                     "type": "integer",
-                    "default": 10,
+                    "default": 50,
                     "minimum": 1,
-                    "description": "Amplicon median coverage AND per-SNP depth threshold",
-                    "help_text": "Was 50x during the retired feasibility phase, which left dhfr callable in only 27.7% of samples."
+                    "description": "Amplicon median coverage AND per-SNP depth threshold (primary = 50x)",
+                    "help_text": "50x is the primary threshold (Girgis 2023; Runtuwene 2018). Use -profile sensitivity_10x for the secondary 10x analysis; require qualitative conclusions to be threshold-invariant."
                 },
                 "analysis_date": {
                     "type": "string",
@@ -143,6 +143,12 @@
             "title": "Generic options",
             "type": "object",
             "properties": {
+                "container_registry": {
+                    "type": "string",
+                    "default": "ghcr.io/owner",
+                    "description": "Registry namespace for the ampliresist-OWNED images (ampliresist-r, ampliresist-figures). Replace 'owner' with your GitHub org/user, or override at runtime.",
+                    "help_text": "Public tool images are pinned by immutable digest in each module; only the two ampliresist-built images use this namespace."
+                },
                 "publish_dir_mode": {
                     "type": "string",
                     "default": "copy",

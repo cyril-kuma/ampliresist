@@ -7,7 +7,7 @@
 process GENOTYPE_CALLS {
     tag "${params.cohort_name}"
     label 'process_medium'
-    container "drag1-downstream:1.0"
+    container "${params.container_registry}/ampliresist-r:1.0.0"
 
     input:
     path coverage_qc     // 01_coverage_qc/ - per-specimen, per-gene callability

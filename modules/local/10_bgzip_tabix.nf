@@ -3,7 +3,7 @@
 process BGZIP_TABIX {
     tag "${meta.id}"
     label 'process_single'
-    container "quay.io/biocontainers/tabix:1.11--hdfd78af_0"
+    container "quay.io/biocontainers/tabix@sha256:106e72ca3c7ca98c12b3971ba3d2699f4ec63673976f6037a38ebf1d46727515"  // htslib/tabix 1.11
 
     input:
     tuple val(meta), path(vcf)

@@ -7,7 +7,7 @@
 process SUMMARY_TABLES {
     tag "${params.cohort_name}"
     label 'process_low'
-    container "drag1-downstream:1.0"
+    container "${params.container_registry}/ampliresist-r:1.0.0"
 
     input:
     path coverage_qc

@@ -6,7 +6,7 @@
 process PUBLICATION_PLOTS {
     tag "${params.cohort_name}"
     label 'process_low'
-    container "haema-figures:0.4.0"
+    container "${params.container_registry}/ampliresist-figures:1.0.0"
 
     input:
     path summary

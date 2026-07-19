@@ -35,6 +35,58 @@ workflow {
     }
 
     //
+    // Preflight — fail fast, before any compute, with actionable messages.
+    // Covers what the JSON schema cannot: asset COMPLETENESS (not just existence
+    // of a top path), model files, geo files, workbook type, and run uniqueness.
+    //
+    def preflight = []
+
+    // Reference panel: every FASTA named in the manifest must exist.
+    file(params.reference_manifest).readLines().drop(1).each { row ->
+        if (!row?.trim()) return
+        def cols = row.split(',')
+        def rp = cols.size() > 1 ? cols[1].trim() : ''
+        def rf = rp.startsWith('/') ? file(rp) : file("${projectDir}/${rp}")
+        if (!rf.exists()) preflight << "reference FASTA missing for '${cols[0]}': ${rf}"
+    }
+
+    // Clair3 model: all four TensorFlow files must be present.
+    if (params.variant_caller == 'clair3' && params.clair3_model) {
+        ['pileup.index', 'pileup.data-00000-of-00001',
+         'full_alignment.index', 'full_alignment.data-00000-of-00001'].each { f ->
+            if (!file("${params.clair3_model}/${f}").exists())
+                preflight << "Clair3 model file missing: ${params.clair3_model}/${f} (see assets/references/clair3_models/PROVENANCE.md)"
+        }
+    }
+
+    if (params.drug_resistance) {
+        // Geographic assets required by stage 18.
+        ['ghana_ADM0.geojson', 'ghana_ADM1.geojson'].each { g ->
+            if (!file("${params.plot_geo_dir}/${g}").exists())
+                preflight << "geo asset missing: ${params.plot_geo_dir}/${g} (default is assets/geo; see assets/geo/PROVENANCE.md)"
+        }
+        // The metadata source of truth must be a provided .xlsx workbook.
+        if (!params.samplesheet)
+            preflight << "--samplesheet is required for the drug-resistance analysis: an .xlsx workbook with a '${params.multiplex_sheet}' sheet."
+        else if (!(params.samplesheet ==~ /(?i).*\.xlsx$/))
+            preflight << "--samplesheet must be an .xlsx workbook (read via read_xlsx): ${params.samplesheet}"
+        else if (!file(params.samplesheet).exists())
+            preflight << "--samplesheet not found: ${params.samplesheet}"
+    }
+
+    // Run manifest: run_name keys the metadata join and must be unique.
+    def runNames = file(params.input).readLines().drop(1)
+        .findAll { it?.trim() }.collect { it.split(',')[0].trim() }
+    def counts = [:]
+    runNames.each { counts[it] = (counts[it] ?: 0) + 1 }
+    def dupRuns = counts.findAll { e -> e.value > 1 }.collect { e -> e.key }
+    if (dupRuns) preflight << "duplicate run_name(s) in --input: ${dupRuns.join(', ')}"
+
+    if (preflight) {
+        error("Preflight validation failed:\n  - " + preflight.join("\n  - "))
+    }
+
+    //
     // Input: one row per sequencing run. Any number of runs may be given; the
     // drug-resistance analysis is grouped per run automatically.
     //
@@ -99,7 +151,6 @@ workflow {
             ch_run_names,
             file(params.resources, checkIfExists: true),
             file(params.samplesheet, checkIfExists: true),
-            file(params.plot_metadata, checkIfExists: true),
             file(params.plot_geo_dir, checkIfExists: true)
         )
     }

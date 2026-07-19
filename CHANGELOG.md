@@ -1,5 +1,50 @@
 # Changelog
 
+## 2.4.0 — Portable, self-contained release (branch `refactor/portable-release`)
+
+**Infrastructure only — no change to variant-calling, thresholds, filters, or
+analysis logic. Verified end-to-end (`-profile test,docker`, 211 tasks, 0 failed)
+and by byte-identical figure source CSVs across the old and new figure image.**
+
+### Containers
+- **Replaced the borrowed `haema-figures:0.4.0`** (a HÆMA-project image) with an
+  ampliresist-owned `ampliresist-figures` (`containers/figures.Dockerfile`;
+  python 3.11 + numpy/pandas/matplotlib + procps). Stage 18 imports only those.
+- **Renamed `drag1-downstream:1.0` → `ampliresist-r`** (`containers/r.Dockerfile`,
+  unchanged build). Both owned images resolve through `--container_registry`.
+- **Pinned every public image by immutable digest** in-module (was mutable tags).
+
+### Assets & provenance
+- **Vendored the Ghana boundaries into `assets/geo/`** (geoBoundaries, CC BY 4.0)
+  with `PROVENANCE.md` + `SHA256SUMS`; removed the `02_plasmodium_qpcr` runtime
+  dependency and the spurious `/pipeline/` path in the default.
+- Added `assets/references/PROVENANCE.md` (loci classification: 5 resistance loci
+  + `csp`/`msp1` antigen loci) and `assets/references/clair3_models/PROVENANCE.md`
+  (model source, chemistry, download, checksum); added `SHA256SUMS`.
+
+### Run discovery & validation
+- Rewrote `bin/make_run_samplesheet.sh` for the canonical `<run>/<flowcell>/`
+  layout with deterministic discovery and hard errors for missing/ambiguous
+  flowcells, missing summaries and duplicate run names; deprecated the historical
+  double-nested layout (tolerated with a warning).
+- Added fail-fast **preflight** in `main.nf`: reference completeness, Clair3 model
+  files, geo assets, `.xlsx` workbook, and run-name uniqueness.
+
+### Metadata
+- `samplesheet_clean_metadata.csv` is now **derived from the workbook inside the
+  workflow** (`bin/08_clean_metadata.R`, module `18a` `CLEAN_METADATA`) and passed
+  to stage 18 by channel. `--plot_metadata` is now an **optional override** only.
+
+### Params/schema
+- `plot_metadata` default → `null` (override); `plot_geo_dir` → `assets/geo`;
+  `samplesheet` → `null` (required); corrected schema `min_cov` default (10 → 50);
+  registered `container_registry`.
+
+### Tests & docs
+- `tests/test_run_discovery.sh`, `tests/test_containers.sh`, bundled
+  `tests/fixtures/test_samplesheet.xlsx` (makes `-profile test` self-contained),
+  `docs/containers.md`; updated README/CITATIONS.
+
 ## Roadmap-driven publication figures
 
 - Replaced the exploratory eight-figure suite with five manuscript figures that follow the project visualization roadmap: geographic haplotype surveillance, multigenic UpSet intersections, ecological resistance abacus, vector/feeding complexity, and adjusted effect-size forest plots.

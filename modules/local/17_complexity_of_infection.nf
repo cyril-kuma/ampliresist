@@ -12,7 +12,7 @@
 process COMPLEXITY_OF_INFECTION {
     tag "${params.cohort_name}"
     label 'process_low'
-    container "drag1-downstream:1.0"
+    container "${params.container_registry}/ampliresist-r:1.0.0"
 
     input:
     path per_calls        // per_call.tsv, one per run, collected

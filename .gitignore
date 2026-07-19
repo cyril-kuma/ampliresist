@@ -28,7 +28,11 @@ docs/provenance/*
 
 # Clair3 basecalling model (~78 MB). Download the model matching your chemistry
 # from ONT Rerio: https://github.com/nanoporetech/rerio
-assets/references/clair3_models/
+# Model binaries are obtained per PROVENANCE.md (large, licence-gated); keep the
+# provenance + checksum docs tracked so a clean clone knows how to fetch/verify.
+assets/references/clair3_models/*
+!assets/references/clair3_models/PROVENANCE.md
+!assets/references/clair3_models/PROVENANCE.sha256
 
 # ---------------------------------------------------------------------------
 # Nextflow scratch, caches and results
@@ -56,3 +60,6 @@ __pycache__/
 *.pyc
 .Rhistory
 .RData
+
+# Stale/local generated run manifests (machine-specific paths)
+assets/runs.metadata*.csv

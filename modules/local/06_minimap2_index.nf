@@ -3,7 +3,7 @@
 process MINIMAP2_INDEX {
     tag "${meta.id}"
     label 'process_low'
-    container "quay.io/biocontainers/minimap2:2.24--h7132678_1"
+    container "quay.io/biocontainers/minimap2@sha256:1f23d5cfbefb25ef4f9a0ee5b4f78d3b6cb0b3c955028d80e1d8b00bc97e299a"  // minimap2 2.24
 
     input:
     tuple val(meta), path(fasta), path(fai)

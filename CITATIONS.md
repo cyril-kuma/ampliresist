@@ -43,3 +43,18 @@
 - [SAMtools](https://www.ncbi.nlm.nih.gov/pubmed/19505943/)
 
   > Li H, Handsaker B, Wysoker A, Fennell T, Ruan J, Homer N, Marth G, Abecasis G, Durbin R; 1000 Genome Project Data Processing Subgroup. The Sequence Alignment/Map format and SAMtools. Bioinformatics. 2009 Aug 15;25(16):2078-9. doi: 10.1093/bioinformatics/btp352. Epub 2009 Jun 8. PubMed PMID: 19505943; PubMed Central PMCID: PMC2723002.
+
+## Data & model resources
+
+- [geoBoundaries](https://www.geoboundaries.org) — Ghana administrative boundaries (ADM0/ADM1), **CC BY 4.0**. See `assets/geo/PROVENANCE.md`.
+
+  > Runfola D, Anderson A, Baier H, Crittenden M, Dowker E, Fuhrig S, et al. geoBoundaries: A global database of political administrative boundaries. PLoS ONE. 2020;15(4):e0231866. doi: 10.1371/journal.pone.0231866
+
+- **Clair3 ONT model** `r1041_e82_400bps_sup_v430` (R10.4.1/E8.2/400bps SUP v4.3.0) — Oxford Nanopore Technologies, via [Rerio](https://github.com/nanoporetech/rerio) / the Clair3 model zoo. See `assets/references/clair3_models/PROVENANCE.md`.
+
+- ***P. falciparum* 3D7 reference CDS** for the amplicon panel (`crt, dhfr, dhps, mdr1, k13, csp, msp1`). See `assets/references/PROVENANCE.md`.
+
+## Ampliresist-owned container images
+
+- `ampliresist-r` (`containers/r.Dockerfile`) — `FROM rocker/tidyverse:4.4.1`; the R analysis runtime (formerly `drag1-downstream`).
+- `ampliresist-figures` (`containers/figures.Dockerfile`) — `FROM python:3.11.15-slim`; numpy/pandas/matplotlib figure runtime (replaces the borrowed `haema-figures`). See `docs/containers.md`.

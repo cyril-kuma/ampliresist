@@ -1712,8 +1712,8 @@ def figure5_geographic_context(result_dir: Path, outdir: Path) -> None:
         )
     pd.DataFrame(fixed_rows).to_csv(outdir / "figure5_fixed_absent_marker_stats_source.csv", index=False)
 
-    adm0 = geojson_rings(Path("02_plasmodium_qpcr/pipeline/data/geo/ghana_ADM0.geojson"))
-    adm1 = geojson_rings(Path("02_plasmodium_qpcr/pipeline/data/geo/ghana_ADM1.geojson"))
+    adm0 = geojson_rings(Path("assets/geo/ghana_ADM0.geojson"))
+    adm1 = geojson_rings(Path("assets/geo/ghana_ADM1.geojson"))
     all_pts = [pt for ring in adm0 for pt in ring]
     lon_min, lon_max = min(x for x, _ in all_pts), max(x for x, _ in all_pts)
     lat_min, lat_max = min(y for _, y in all_pts), max(y for _, y in all_pts)

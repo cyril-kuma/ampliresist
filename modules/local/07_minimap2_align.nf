@@ -12,7 +12,7 @@
 process MINIMAP2_ALIGN {
     tag "${meta.id}"
     label 'process_medium'
-    container "quay.io/biocontainers/mulled-v2-66534bcbb7031a148b13e2ad42583020b9cd25c4:1679e915ddb9d6b4abda91880c4b48857d471bd8-0"
+    container "quay.io/biocontainers/mulled-v2-66534bcbb7031a148b13e2ad42583020b9cd25c4@sha256:1a2d2f9958084a835a8897d16d339484202c8a31ad17fded2f14294f26de4d3c"  // minimap2 2.24 + samtools 1.15
 
     input:
     tuple val(meta), path(fastq), path(fasta), path(fai), path(mmi)
