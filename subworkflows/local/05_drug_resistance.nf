@@ -41,31 +41,31 @@ workflow DRUG_RESISTANCE {
     geo_dir       // path: Ghana boundary GeoJSON directory (assets/geo)
 
     main:
-    AMPLICON_COVERAGE(bedgraphs, run_names, resources, samplesheet)
+    AMPLICON_COVERAGE(bedgraphs, run_names, resources, samplesheet, params.min_cov)
 
     // 13 depends on 12: a genotype cannot be called honestly without knowing
     // whether the amplicon was callable in that specimen. Without it, a
     // low-coverage specimen with no variant record is indistinguishable from a
     // wild-type one, and gets reported as wild type.
-    GENOTYPE_CALLS(AMPLICON_COVERAGE.out.block, vcfs, run_names, resources, samplesheet)
+    GENOTYPE_CALLS(AMPLICON_COVERAGE.out.block, vcfs, run_names, resources, samplesheet, params.min_cov)
 
     RESISTANCE_FREQUENCIES(
         AMPLICON_COVERAGE.out.block,
         GENOTYPE_CALLS.out.block,
-        run_names, resources, samplesheet
+        run_names, resources, samplesheet, params.min_cov
     )
 
     SUMMARY_TABLES(
         AMPLICON_COVERAGE.out.block,
         GENOTYPE_CALLS.out.block,
         RESISTANCE_FREQUENCIES.out.block,
-        run_names, resources, samplesheet
+        run_names, resources, samplesheet, params.min_cov
     )
 
     // 17 - complexity of infection, from within-sample heterozygosity. Depends on
     // the artefact catalogue emitted by stage 13: without it every specimen looks
     // polygenomic.
-    COMPLEXITY_OF_INFECTION(per_calls, GENOTYPE_CALLS.out.block)
+    COMPLEXITY_OF_INFECTION(per_calls, GENOTYPE_CALLS.out.block, params.min_cov)
 
     // Cleaned ecological metadata is DERIVED from the authoritative workbook
     // inside the workflow (default) and propagated to stage 18 by channel.
@@ -84,7 +84,8 @@ workflow DRUG_RESISTANCE {
         GENOTYPE_CALLS.out.block,
         COMPLEXITY_OF_INFECTION.out.block,
         ch_plot_metadata,
-        geo_dir
+        geo_dir,
+        params.min_cov
     )
 
     emit:

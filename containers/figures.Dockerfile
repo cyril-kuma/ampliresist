@@ -20,7 +20,7 @@ FROM python:3.11.15-slim-bookworm
 LABEL org.opencontainers.image.title="ampliresist-figures"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.description="Matplotlib publication-figure runtime for ampliresist stage 18"
-LABEL org.opencontainers.image.source="https://github.com/owner/ampliresist"
+LABEL org.opencontainers.image.source="https://github.com/cyril-kuma/ampliresist"
 LABEL org.opencontainers.image.licenses="MIT"
 
 # procps provides `ps`, which Nextflow requires in every task container to

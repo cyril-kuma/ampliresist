@@ -15,6 +15,12 @@ process PUBLICATION_PLOTS {
     path plot_metadata
     path geo_dir
 
+    // min_cov is a DECLARED INPUT, not a params reference inside the script.
+    // Nextflow's cache key does not track params interpolated into a script body,
+    // so `-profile sensitivity_10x -resume` silently replayed the 50x tasks and
+    // published them as 10x results. Declared inputs do participate in the hash.
+    val  min_cov
+
     output:
     path "05_plots", emit: plots
 
@@ -30,6 +36,7 @@ process PUBLICATION_PLOTS {
         --result-dir resistance_input \\
         --metadata "\$PWD/${plot_metadata}" \\
         --geo-dir "\$PWD/${geo_dir}" \\
+        --min-cov ${min_cov} \\
         --outdir 05_plots
     """
 

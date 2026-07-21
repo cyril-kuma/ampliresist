@@ -16,6 +16,12 @@ process GENOTYPE_CALLS {
     path resources
     path samplesheet
 
+    // min_cov is a DECLARED INPUT, not a params reference inside the script.
+    // Nextflow's cache key does not track params interpolated into a script body,
+    // so `-profile sensitivity_10x -resume` silently replayed the 50x tasks and
+    // published them as 10x results. Declared inputs do participate in the hash.
+    val  min_cov
+
     output:
     path "02_genotype_calls", emit: block
 
@@ -28,7 +34,7 @@ process GENOTYPE_CALLS {
     export NANORAVE_RUN_NAME='${params.cohort_name}'
     export NANORAVE_RUNS='${run_names.join("|")}'
     export NANORAVE_ANALYSIS_DATE='${params.analysis_date}'
-    export NANORAVE_MIN_COV='${params.min_cov}'
+    export NANORAVE_MIN_COV='${min_cov}'
     export NANORAVE_RESOURCE_DIR="\$PWD/${resources}"
     export NANORAVE_METADATA_FILE="\$PWD/${samplesheet}"
     export NANORAVE_MULTIPLEX_SHEET='${params.multiplex_sheet}'
@@ -40,7 +46,7 @@ process GENOTYPE_CALLS {
     # -L: the staged directory is a symlink; find will not descend without it.
     export NANORAVE_COVERAGE_TABLE=\$(find -L ${coverage_qc} -name '*coverage_by_run_sample*.csv' | head -1)
     export NANORAVE_INPUT_DIR="\$PWD/input"
-    export NANORAVE_MIN_DP='${params.min_cov}'
+    export NANORAVE_MIN_DP='${min_cov}'
 
     02_genotype_calls.R
 

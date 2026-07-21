@@ -122,9 +122,22 @@ def main():
     check(totals == {n_field},
           f"n_total == field-sample count, i.e. controls excluded ({totals} vs {n_field})")
 
-    by_gene = {r["gene"]: int(r["n_callable"])
-               for r in freq if r["n_callable"] not in ("", "NA")}
-    print(f"  n_callable by gene: {by_gene}")
+    # Callability is a property of the CODON, not the gene: a gene can hold both a
+    # well-covered marker and an artefact-masked one with n_callable = 0. Keying a
+    # dict on gene silently kept whichever SNP came last, so MDR1 reported 0
+    # callable when mdr1_256_AT is callable in every sample. Report the best-covered
+    # marker per gene, and name any masked ones rather than letting them overwrite.
+    by_gene = {}
+    for r in freq:
+        if r["n_callable"] in ("", "NA"):
+            continue
+        g = r["gene"]
+        by_gene[g] = max(by_gene.get(g, 0), int(r["n_callable"]))
+    masked = [r["SNP"] for r in freq
+              if r["n_callable"] in ("", "NA", "0") or r.get("callable") == "not_callable"]
+    print(f"  n_callable by gene (best-covered marker): {by_gene}")
+    if masked:
+        print(f"  not callable in any sample (artefact-masked or uncovered): {masked}")
     check(all(v <= n_field for v in by_gene.values()),
           "no gene reports more callable samples than exist")
 
